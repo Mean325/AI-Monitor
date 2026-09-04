@@ -1,0 +1,48 @@
+# macOS metadata
+.DS_Store
+._*
+
+# Build products and local previews
+.build/
+.build-*/
+.dist/
+.release/
+dist/
+build/
+DerivedData/
+.ui-*
+*.app/
+*.dSYM/
+*.xcarchive/
+*.xcresult/
+*.dmg
+*.ipa
+
+# Per-user Xcode and editor state
+xcuserdata/
+*.xcuserstate
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local agent configuration and plans
+.claude/
+.codex/
+
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+!.env.sample
+*.p12
+*.p8
+*.pfx
+*.key
+*.mobileprovision
+*.provisionprofile
+
+# Runtime logs and caches
+*.log
+__pycache__/
+.cache/

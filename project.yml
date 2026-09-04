@@ -1,0 +1,90 @@
+name: CodexLinxDisplay
+
+options:
+  bundleIdPrefix: com.olivia
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ENABLE_APP_SANDBOX: NO
+    ENABLE_HARDENED_RUNTIME: YES
+
+targets:
+  CodexLinxDisplay:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/App
+      - path: Resources/en.lproj
+        buildPhase: resources
+      - path: Resources/zh_CN.lproj
+        buildPhase: resources
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: AI Monitor
+        CFBundleDevelopmentRegion: zh_CN
+        CFBundleLocalizations:
+          - zh_CN
+          - en
+        CFBundleName: AI Monitor
+        CFBundleShortVersionString: "0.2.0"
+        CFBundleVersion: "3"
+        LSUIElement: true
+        NSHighResolutionCapable: true
+        NSLocalNetworkUsageDescription: 用于将 Codex 用量图片发送到局域网内的键盘屏幕。
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGN_IDENTITY: "-"
+        PRODUCT_BUNDLE_IDENTIFIER: com.olivia.CodexLinxDisplay
+        PRODUCT_NAME: AI Monitor
+        PRODUCT_MODULE_NAME: CodexLinxDisplay
+  CodexLinxPreview:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/Shared
+      - path: Tools/Preview
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.olivia.CodexLinxPreview
+        PRODUCT_NAME: CodexLinxPreview
+
+  CodexLinxDisplayTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: CodexLinxDisplay
+    hostApplication: CodexLinxDisplay
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.olivia.CodexLinxDisplayTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AI Monitor.app/Contents/MacOS/AI Monitor"
+
+schemes:
+  CodexLinxDisplay:
+    build:
+      targets:
+        CodexLinxDisplay: all
+        CodexLinxDisplayTests: [test]
+    test:
+      targets:
+        - CodexLinxDisplayTests
+  CodexLinxPreview:
+    build:
+      targets:
+        CodexLinxPreview: all
