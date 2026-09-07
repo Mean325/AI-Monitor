@@ -35,6 +35,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>用于将 Codex 用量图片发送到局域网内的键盘屏幕。</string>
+	<string>用于将用量卡片发送到局域网内的键盘屏幕。首次运行请在系统提示中允许“本地网络”。</string>
 </dict>
 </plist>

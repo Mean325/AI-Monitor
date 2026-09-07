@@ -56,7 +56,7 @@ final class UsageCardRendererTests: XCTestCase {
       )
     }
 
-    XCTAssertEqual(renderedCards.count, 6)
+    XCTAssertEqual(renderedCards.count, UsageCardColorScheme.allCases.count)
     XCTAssertEqual(Set(renderedCards.map(\.data)).count, renderedCards.count)
     XCTAssertTrue(renderedCards.allSatisfy { $0.pixelWidth == 142 && $0.pixelHeight == 428 })
   }
@@ -306,6 +306,15 @@ final class UsageCardRendererTests: XCTestCase {
     XCTAssertEqual(Set(renderedStates.map(\.data)).count, 5)
   }
 
+  func testColorAndDesignSubtitlesOmitTrailingTone() {
+    for colorScheme in UsageCardColorScheme.allCases {
+      XCTAssertFalse(colorScheme.subtitle.contains("·"), colorScheme.title)
+    }
+    for design in UsageCardDesign.allCases {
+      XCTAssertFalse(design.subtitle.contains("·"), design.title)
+    }
+  }
+
   func testRemovedColorSchemesAreNoLongerAvailable() {
     XCTAssertNil(UsageCardColorScheme(rawValue: "quantumViolet"))
     XCTAssertNil(UsageCardColorScheme(rawValue: "matrixGreen"))
@@ -393,6 +402,92 @@ final class UsageCardRendererTests: XCTestCase {
     try assertColor(signal.primaryText, equals: (190, 192, 194))
     try assertColor(signal.secondaryText, equals: (245, 235, 174))
     try assertColor(signal.tertiaryText, equals: (147, 149, 151))
+  }
+
+  @MainActor
+  func testRainbowAccentFollowsRemainingPercent() throws {
+    let scheme = UsageCardColorScheme.rainbow
+
+    try assertColor(scheme.palette(remainingPercent: 0).accent, equals: (232, 82, 111))
+    try assertColor(scheme.palette(remainingPercent: 20).accent, equals: (232, 82, 111))
+    try assertColor(scheme.palette(remainingPercent: 21).accent, equals: (245, 223, 77))
+    try assertColor(scheme.palette(remainingPercent: 40).accent, equals: (245, 223, 77))
+    try assertColor(scheme.palette(remainingPercent: 41).accent, equals: (85, 230, 184))
+    try assertColor(scheme.palette(remainingPercent: 60).accent, equals: (85, 230, 184))
+    try assertColor(scheme.palette(remainingPercent: 80).accent, equals: (85, 230, 184))
+    try assertColor(scheme.palette(remainingPercent: 81).accent, equals: (0, 177, 118))
+    try assertColor(scheme.palette(remainingPercent: 100).accent, equals: (0, 177, 118))
+    try assertColor(scheme.palette(remainingPercent: nil).accent, equals: (0, 177, 118))
+  }
+
+  @MainActor
+  func testRainbowPaletteKeepsSurfacesWhileSwappingAccent() throws {
+    let low = UsageCardColorScheme.rainbow.palette(remainingPercent: 10)
+    let high = UsageCardColorScheme.rainbow.palette(remainingPercent: 95)
+
+    try assertColor(low.background, equals: (8, 14, 12))
+    try assertColor(low.cardBackground, equals: (18, 28, 24))
+    try assertColor(low.insetBackground, equals: (13, 21, 18))
+    try assertColor(low.border, equals: (42, 64, 54))
+    try assertColor(low.primaryText, equals: (200, 210, 206))
+    try assertColor(low.accent, equals: (232, 82, 111))
+    try assertColor(high.accent, equals: (0, 177, 118))
+    try assertColor(high.background, equals: (8, 14, 12))
+  }
+
+  @MainActor
+  func testRainbowRendersDistinctCardsAcrossRemainingBands() throws {
+    let rendered = try [10, 30, 70, 95].map { remaining in
+      try UsageCardRenderer.render(
+        snapshot: UsageSnapshot(
+          remainingPercent: remaining,
+          resetDate: UsageSnapshot.sample.resetDate,
+          windowMinutes: UsageSnapshot.sample.windowMinutes,
+          availableResetCount: UsageSnapshot.sample.availableResetCount,
+          planType: UsageSnapshot.sample.planType
+        ),
+        safeAreaHeight: UsageCardLayout.defaultSafeArea,
+        jpegQuality: 0.9,
+        colorScheme: .rainbow
+      )
+    }
+
+    XCTAssertEqual(Set(rendered.map(\.data)).count, rendered.count)
+  }
+
+  @MainActor
+  func testRainbowFollowsQoderCreditRemaining() throws {
+    func credit(remaining: Int, total: Int) -> QoderCreditSnapshot {
+      QoderCreditSnapshot(
+        userType: "personal_professional_trial",
+        creditsUsed: total - remaining,
+        creditsTotal: total,
+        creditsRemaining: remaining,
+        usagePercentage: Double(total - remaining) / Double(total),
+        isQuotaExceeded: remaining <= 0,
+        contextUsedTokens: 1_000,
+        contextLimitTokens: 200_000
+      )
+    }
+
+    let low = try UsageCardRenderer.render(
+      qoderSnapshot: .sample,
+      creditSnapshot: credit(remaining: 30, total: 300),
+      safeAreaHeight: UsageCardLayout.defaultSafeArea,
+      jpegQuality: 0.9,
+      colorScheme: .rainbow
+    )
+    let high = try UsageCardRenderer.render(
+      qoderSnapshot: .sample,
+      creditSnapshot: credit(remaining: 270, total: 300),
+      safeAreaHeight: UsageCardLayout.defaultSafeArea,
+      jpegQuality: 0.9,
+      colorScheme: .rainbow
+    )
+
+    XCTAssertEqual(credit(remaining: 30, total: 300).remainingPercent, 10)
+    XCTAssertEqual(credit(remaining: 270, total: 300).remainingPercent, 90)
+    XCTAssertNotEqual(low.data, high.data)
   }
 
   func testDefaultSafeAreaLeavesRoomForFirmwareStatusBar() {

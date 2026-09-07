@@ -31,6 +31,15 @@ enum ImageAPIError: LocalizedError {
       return message.isEmpty ? "图像 API 返回 HTTP \(code)。" : "图像 API 返回 HTTP \(code)：\(message)"
     }
   }
+
+  var isTransientLocalNetwork: Bool {
+    switch self {
+    case .networkUnavailable, .timedOut:
+      return true
+    default:
+      return false
+    }
+  }
 }
 
 struct ImageUploadResult: Sendable {
@@ -39,6 +48,23 @@ struct ImageUploadResult: Sendable {
 }
 
 struct ImageAPIClient: ImageUploading {
+  private let session: URLSession
+
+  init(session: URLSession = ImageAPIClient.makeSession()) {
+    self.session = session
+  }
+
+  /// Local Network TCC denies the first LAN request immediately while the
+  /// Allow dialog is up (TN3179). `waitsForConnectivity` keeps that request
+  /// parked until the path is allowed, instead of failing as -1009.
+  static func makeSession() -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.waitsForConnectivity = true
+    configuration.timeoutIntervalForRequest = 20
+    configuration.timeoutIntervalForResource = 20
+    return URLSession(configuration: configuration)
+  }
+
   func upload(_ imageData: Data, endpoint: String) async throws -> ImageUploadResult {
     guard let url = URL(string: endpoint),
       ["http", "https"].contains(url.scheme?.lowercased() ?? "")
@@ -54,20 +80,9 @@ struct ImageAPIClient: ImageUploading {
     let data: Data
     let response: URLResponse
     do {
-      (data, response) = try await URLSession.shared.data(for: request)
-    } catch let error as URLError {
-      switch error.code {
-      case .cannotConnectToHost, .cannotFindHost, .networkConnectionLost:
-        throw ImageAPIError.connectionFailed
-      case .timedOut:
-        throw ImageAPIError.timedOut
-      case .notConnectedToInternet, .dataNotAllowed:
-        throw ImageAPIError.networkUnavailable
-      default:
-        throw ImageAPIError.transport(error.localizedDescription)
-      }
+      (data, response) = try await session.data(for: request)
     } catch {
-      throw ImageAPIError.transport(error.localizedDescription)
+      throw mapUploadError(error)
     }
     guard let httpResponse = response as? HTTPURLResponse else {
       throw ImageAPIError.invalidResponse
@@ -81,4 +96,41 @@ struct ImageAPIClient: ImageUploading {
 
     return ImageUploadResult(statusCode: httpResponse.statusCode, responseText: responseText)
   }
+
+  private func mapUploadError(_ error: Error) -> ImageAPIError {
+    if isLocalNetworkPrivacyFailure(error) {
+      return .networkUnavailable
+    }
+    if let urlError = error as? URLError {
+      switch urlError.code {
+      case .cannotConnectToHost, .cannotFindHost:
+        return .connectionFailed
+      case .timedOut:
+        return .timedOut
+      default:
+        return .transport(urlError.localizedDescription)
+      }
+    }
+    return .transport(error.localizedDescription)
+  }
+}
+
+private func isLocalNetworkPrivacyFailure(_ error: Error) -> Bool {
+  var current: Error? = error
+  while let err = current {
+    let ns = err as NSError
+    if ns.domain == NSPOSIXErrorDomain, ns.code == 50 || ns.code == 51 {
+      return true
+    }
+    if ns.domain == NSURLErrorDomain {
+      switch URLError.Code(rawValue: ns.code) {
+      case .notConnectedToInternet, .dataNotAllowed, .networkConnectionLost:
+        return true
+      default:
+        break
+      }
+    }
+    current = ns.userInfo[NSUnderlyingErrorKey] as? Error
+  }
+  return false
 }

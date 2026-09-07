@@ -18,12 +18,12 @@ struct CodexLinxDisplayApp: App {
       }
     }
 
-    let model = AppModel(
-      hookInstaller: hookInstaller,
-      claudeHookInstaller: claudeHookInstaller
+    _model = StateObject(
+      wrappedValue: AppModel(
+        hookInstaller: hookInstaller,
+        claudeHookInstaller: claudeHookInstaller
+      )
     )
-    _model = StateObject(wrappedValue: model)
-    model.start()
   }
 
   var body: some Scene {
@@ -38,11 +38,13 @@ struct CodexLinxDisplayApp: App {
         iconPosition: model.menuBarOriginalIconPosition,
         activityState: model.selectedActivityState
       )
+      .task { model.start() }
     }
     .menuBarExtraStyle(.window)
 
     Settings {
       SettingsView(model: model)
+        .task { model.start() }
     }
     .windowResizability(.contentSize)
   }

@@ -14,6 +14,12 @@ struct QoderCreditSnapshot: Equatable, Sendable {
   let contextUsedTokens: Int
   let contextLimitTokens: Int
 
+  var remainingPercent: Int? {
+    guard creditsTotal > 0 else { return nil }
+    let raw = Double(creditsRemaining) / Double(creditsTotal) * 100
+    return Int(raw.rounded())
+  }
+
   var creditsPercentageDisplay: String {
     String(format: "%.0f%%", usagePercentage * 100)
   }

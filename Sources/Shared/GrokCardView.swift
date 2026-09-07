@@ -7,7 +7,9 @@ struct GrokCardView: View {
   let colorScheme: UsageCardColorScheme
   let design: UsageCardDesign
 
-  private var palette: UsageCardPalette { colorScheme.palette }
+  private var palette: UsageCardPalette {
+    colorScheme.palette(remainingPercent: snapshot?.remainingPercent)
+  }
   private var remainingProgress: CGFloat {
     CGFloat(snapshot?.remainingProgress ?? 0)
   }

@@ -387,6 +387,7 @@ enum UsageCardColorScheme: String, CaseIterable, Identifiable {
   case peachGlow
   case cloudDancer
   case signalYellow
+  case rainbow
 
   var id: String { rawValue }
 
@@ -398,17 +399,19 @@ enum UsageCardColorScheme: String, CaseIterable, Identifiable {
     case .peachGlow: return "柔桃光"
     case .cloudDancer: return "云迹白"
     case .signalYellow: return "信号黄"
+    case .rainbow: return "彩虹"
     }
   }
 
   var subtitle: String {
     switch self {
-    case .deepSpace: return "沉稳 · 默认"
-    case .auroraBlue: return "Very Peri · 静谧"
-    case .fusionMagenta: return "Viva Magenta · 浓郁"
-    case .peachGlow: return "Peach Fuzz · 温润"
-    case .cloudDancer: return "Cloud Dancer · 留白"
-    case .signalYellow: return "灰黄 · 工业"
+    case .deepSpace: return "沉稳"
+    case .auroraBlue: return "Very Peri"
+    case .fusionMagenta: return "Viva Magenta"
+    case .peachGlow: return "Peach Fuzz"
+    case .cloudDancer: return "Cloud Dancer"
+    case .signalYellow: return "灰黄"
+    case .rainbow: return "余量"
     }
   }
 
@@ -420,10 +423,52 @@ enum UsageCardColorScheme: String, CaseIterable, Identifiable {
     case .peachGlow: return "sun.horizon.fill"
     case .cloudDancer: return "cloud.fill"
     case .signalYellow: return "scope"
+    case .rainbow: return "rainbow"
+    }
+  }
+
+  var previewSwatches: [Color] {
+    switch self {
+    case .rainbow:
+      return [
+        Self.rainbowAccent(remainingPercent: 10),
+        Self.rainbowAccent(remainingPercent: 30),
+        Self.rainbowAccent(remainingPercent: 70),
+        Self.rainbowAccent(remainingPercent: 90),
+      ]
+    default:
+      return [palette.accent, palette.primaryText]
     }
   }
 
   var palette: UsageCardPalette {
+    palette(remainingPercent: nil)
+  }
+
+  func palette(remainingPercent: Int?) -> UsageCardPalette {
+    let base = staticPalette
+    guard self == .rainbow else { return base }
+    return base.replacingAccent(Self.rainbowAccent(remainingPercent: remainingPercent))
+  }
+
+  /// 0–20 `#E8526F`, 20–40 `#F5DF4D`, 40–80 `#55E6B8` (40–60 unspecified, shares 60–80), 80–100 `#00B176`.
+  static func rainbowAccent(remainingPercent: Int?) -> Color {
+    guard let remainingPercent else {
+      return rgb(0, 177, 118)
+    }
+    switch remainingPercent {
+    case ...20:
+      return rgb(232, 82, 111)
+    case ...40:
+      return rgb(245, 223, 77)
+    case ...80:
+      return rgb(85, 230, 184)
+    default:
+      return rgb(0, 177, 118)
+    }
+  }
+
+  private var staticPalette: UsageCardPalette {
     switch self {
     case .deepSpace:
       return UsageCardPalette(
@@ -496,10 +541,25 @@ enum UsageCardColorScheme: String, CaseIterable, Identifiable {
         secondaryText: rgb(245, 235, 174),
         tertiaryText: rgb(147, 149, 151)
       )
+    case .rainbow:
+      return UsageCardPalette(
+        background: rgb(8, 14, 12),
+        cardBackground: rgb(18, 28, 24),
+        insetBackground: rgb(13, 21, 18),
+        border: rgb(42, 64, 54),
+        accent: Self.rainbowAccent(remainingPercent: nil),
+        primaryText: rgb(200, 210, 206),
+        secondaryText: rgb(132, 158, 148),
+        tertiaryText: rgb(92, 114, 106)
+      )
     }
   }
 
   private func rgb(_ red: Double, _ green: Double, _ blue: Double) -> Color {
+    Self.rgb(red, green, blue)
+  }
+
+  private static func rgb(_ red: Double, _ green: Double, _ blue: Double) -> Color {
     Color(red: red / 255, green: green / 255, blue: blue / 255)
   }
 }
@@ -527,12 +587,12 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
 
   var subtitle: String {
     switch self {
-    case .classic: return "当前布局 · 清晰"
-    case .orbitalRings: return "动态圆环 · 聚焦"
-    case .liquidGlass: return "柔光层叠 · 通透"
-    case .commandDeck: return "数据仪表 · 高效"
-    case .minimalColumn: return "纵向进度 · 极简"
-    case .nothingMatrix: return "黑白点阵 · 红色强调"
+    case .classic: return "当前布局"
+    case .orbitalRings: return "动态圆环"
+    case .liquidGlass: return "柔光层叠"
+    case .commandDeck: return "数据仪表"
+    case .minimalColumn: return "纵向进度"
+    case .nothingMatrix: return "黑白点阵"
     }
   }
 
@@ -561,6 +621,19 @@ struct UsageCardPalette {
   let primaryText: Color
   let secondaryText: Color
   let tertiaryText: Color
+
+  func replacingAccent(_ accent: Color) -> UsageCardPalette {
+    UsageCardPalette(
+      background: background,
+      cardBackground: cardBackground,
+      insetBackground: insetBackground,
+      border: border,
+      accent: accent,
+      primaryText: primaryText,
+      secondaryText: secondaryText,
+      tertiaryText: tertiaryText
+    )
+  }
 }
 
 struct UsageCardView: View {
@@ -570,7 +643,9 @@ struct UsageCardView: View {
   let colorScheme: UsageCardColorScheme
   let design: UsageCardDesign
 
-  private var palette: UsageCardPalette { colorScheme.palette }
+  private var palette: UsageCardPalette {
+    colorScheme.palette(remainingPercent: snapshot?.remainingPercent)
+  }
   private var remainingProgress: CGFloat {
     CGFloat(max(0, min(100, snapshot?.remainingPercent ?? 0))) / 100
   }

@@ -32,6 +32,16 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     }
   }
 
+  var logoAssetName: String? {
+    switch self {
+    case .codex: return "LogoCodex"
+    case .claudeCode: return "LogoClaude"
+    case .qoder: return "LogoQoder"
+    case .grok: return "LogoGrok"
+    case .customImage: return nil
+    }
+  }
+
   var isUsageMode: Bool {
     switch self {
     case .customImage: return false
@@ -186,10 +196,15 @@ final class AppModel: ObservableObject {
   private var qoderPendingActivityUploadTask: Task<Void, Never>?
   private var grokPendingActivityUploadTask: Task<Void, Never>?
   private var wakeObserver: NSObjectProtocol?
+  private var launchObserver: NSObjectProtocol?
   private var lastUploadedHash: String?
   private var customSourceImage: NSImage?
   private var hasStarted = false
   private var activeAIMonitor: DisplayMode?
+  private let localNetworkRetryDelayNanoseconds: UInt64
+  private let localNetworkRetryWindowNanoseconds: UInt64
+  private var didProbeLocalNetwork = false
+  private var localNetworkRecoveryTask: Task<Void, Never>?
 
   init(
     defaults: UserDefaults = .standard,
@@ -204,7 +219,9 @@ final class AppModel: ObservableObject {
     qoderActivityMonitor: (any CodexActivityMonitoring)? = nil,
     grokUsageClient: any GrokUsageFetching = GrokUsageClient(),
     grokActivityMonitor: (any CodexActivityMonitoring)? = nil,
-    customImageDirectory: URL? = nil
+    customImageDirectory: URL? = nil,
+    localNetworkRetryDelayNanoseconds: UInt64 = 2_000_000_000,
+    localNetworkRetryWindowNanoseconds: UInt64 = 45_000_000_000
   ) {
     let resolvedActivityMonitor = activityMonitor ?? CodexActivityMonitor()
     let resolvedClaudeActivityMonitor = claudeActivityMonitor
@@ -229,6 +246,8 @@ final class AppModel: ObservableObject {
     self.grokUsageClient = grokUsageClient
     self.grokActivityMonitor = resolvedGrokActivityMonitor
     self.customImageDirectory = customImageDirectory ?? Self.defaultCustomImageDirectory
+    self.localNetworkRetryDelayNanoseconds = localNetworkRetryDelayNanoseconds
+    self.localNetworkRetryWindowNanoseconds = localNetworkRetryWindowNanoseconds
     codexActivityState = resolvedActivityMonitor.state
     codexHookInstallationState = hookInstaller.installationState()
     claudeActivityState = resolvedClaudeActivityMonitor.state
@@ -283,8 +302,12 @@ final class AppModel: ObservableObject {
     claudePendingActivityUploadTask?.cancel()
     qoderPendingActivityUploadTask?.cancel()
     grokPendingActivityUploadTask?.cancel()
+    localNetworkRecoveryTask?.cancel()
     if let wakeObserver {
       NotificationCenter.default.removeObserver(wakeObserver)
+    }
+    if let launchObserver {
+      NotificationCenter.default.removeObserver(launchObserver)
     }
   }
 
@@ -341,11 +364,41 @@ final class AppModel: ObservableObject {
       }
     }
 
-    if isUsageMode {
-      usageQueryState = .querying
-      restartScheduler(uploadImmediately: true)
-    } else if customSourceImage != nil {
-      scheduleCurrentModeAction()
+    beginSyncAfterLaunchIfNeeded()
+  }
+
+  private func beginSyncAfterLaunchIfNeeded() {
+    let begin = { [weak self] in
+      guard let self else { return }
+      if self.isUsageMode {
+        self.usageQueryState = .querying
+        self.statusText = "正在同步并推送…"
+        self.restartScheduler(uploadImmediately: true)
+      } else if self.customSourceImage != nil {
+        self.scheduleCurrentModeAction()
+      }
+    }
+
+    if NSApp.isRunning
+      || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    {
+      begin()
+      return
+    }
+
+    launchObserver = NotificationCenter.default.addObserver(
+      forName: NSApplication.didFinishLaunchingNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor in
+        guard let self else { return }
+        if let launchObserver = self.launchObserver {
+          NotificationCenter.default.removeObserver(launchObserver)
+          self.launchObserver = nil
+        }
+        begin()
+      }
     }
   }
 
@@ -717,10 +770,11 @@ final class AppModel: ObservableObject {
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
-      let result = try await imageAPIClient.upload(rendered.data, endpoint: uploadEndpoint)
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
       keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
       lastUploadedHash = hash
       lastUploadDate = Date()
+      lastError = nil
       statusText = "推送成功 · HTTP \(result.statusCode)"
     } catch {
       if didStartUpload {
@@ -734,7 +788,7 @@ final class AppModel: ObservableObject {
           usageQueryState = .failed
         }
         lastError = error.localizedDescription
-        statusText = "同步失败"
+        statusText = didCompleteQuery ? "推送失败" : "同步失败"
       } else {
         usageQueryState = .idle
         lastError = nil
@@ -776,7 +830,7 @@ final class AppModel: ObservableObject {
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
-      let result = try await imageAPIClient.upload(rendered.data, endpoint: uploadEndpoint)
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
       keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
       guard displayMode == .customImage else { return }
       lastUploadedHash = hash
@@ -890,7 +944,7 @@ final class AppModel: ObservableObject {
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
-      let result = try await imageAPIClient.upload(rendered.data, endpoint: uploadEndpoint)
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
       keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
       lastUploadedHash = hash
       lastUploadDate = Date()
@@ -975,7 +1029,7 @@ final class AppModel: ObservableObject {
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
-      let result = try await imageAPIClient.upload(rendered.data, endpoint: uploadEndpoint)
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
       keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
       lastUploadedHash = hash
       lastUploadDate = Date()
@@ -1034,7 +1088,7 @@ final class AppModel: ObservableObject {
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
-      let result = try await imageAPIClient.upload(rendered.data, endpoint: uploadEndpoint)
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
       keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
       lastUploadedHash = hash
       lastUploadDate = Date()
@@ -1102,7 +1156,7 @@ final class AppModel: ObservableObject {
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
-      let result = try await imageAPIClient.upload(rendered.data, endpoint: uploadEndpoint)
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
       keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
       lastUploadedHash = hash
       lastUploadDate = Date()
@@ -1117,6 +1171,61 @@ final class AppModel: ObservableObject {
       }
       lastError = error.localizedDescription
       statusText = "状态卡片推送失败"
+    }
+  }
+
+  private func pushJPEG(_ data: Data, endpoint uploadEndpoint: String) async throws -> ImageUploadResult {
+    let isFirstLocalNetworkUse = !didProbeLocalNetwork
+    if isFirstLocalNetworkUse {
+      await LocalNetworkAccess.preflight(endpoint: uploadEndpoint)
+      didProbeLocalNetwork = true
+    }
+
+    let retryDeadline: Date? = isFirstLocalNetworkUse && localNetworkRetryWindowNanoseconds > 0
+      ? Date().addingTimeInterval(Double(localNetworkRetryWindowNanoseconds) / 1_000_000_000)
+      : nil
+    var attempt = 0
+
+    while true {
+      if attempt > 0 {
+        statusText = "等待本地网络权限…"
+        try await Task.sleep(nanoseconds: localNetworkRetryDelayNanoseconds)
+      }
+
+      do {
+        let result = try await imageAPIClient.upload(data, endpoint: uploadEndpoint)
+        localNetworkRecoveryTask?.cancel()
+        localNetworkRecoveryTask = nil
+        return result
+      } catch let error as ImageAPIError where error.isTransientLocalNetwork {
+        attempt += 1
+        let canRetry: Bool
+        if let retryDeadline {
+          canRetry = Date() < retryDeadline
+        } else {
+          canRetry = attempt < 2
+        }
+        if !canRetry {
+          scheduleLocalNetworkRecovery(after: error)
+          throw error
+        }
+      }
+    }
+  }
+
+  private func scheduleLocalNetworkRecovery(after error: ImageAPIError) {
+    guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+    guard error.isTransientLocalNetwork else { return }
+    localNetworkRecoveryTask?.cancel()
+    localNetworkRecoveryTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 8_000_000_000)
+      guard !Task.isCancelled, let self else { return }
+      guard self.lastUploadDate == nil else { return }
+      if self.isUsageMode {
+        await self.synchronize(upload: true, forceUpload: true)
+      } else if self.displayMode == .customImage {
+        await self.uploadCustomImage(forceUpload: true)
+      }
     }
   }
 

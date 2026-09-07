@@ -12,11 +12,13 @@
 		09FDC1B2E28A3FA5E6AE665B /* GrokUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C49CD533CF0F259DFF364FD /* GrokUsageClient.swift */; };
 		0BCA6DBF683A97C291E5A656 /* QoderCreditSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55F5F10B425C9524BED08F9A /* QoderCreditSnapshot.swift */; };
 		101AB246A549DE12272FDD1C /* CodexHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2772AEC9F5602218A73551 /* CodexHookInstaller.swift */; };
+		134E00F49225548A74BB9E81 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0B0F75745430B7CFD7642BB /* Assets.xcassets */; };
 		142508F9F0BAE3E84CC9215B /* GrokUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B7A2D56F1851CC71B3219B /* GrokUsageClientTests.swift */; };
 		1609887E9A37985B3931FB25 /* ClaudeCodeUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281396CA264CDFF22FD413B5 /* ClaudeCodeUsageClient.swift */; };
 		1610408A1C62B041D51A0484 /* QoderLogClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0841751F3ED1CE4165FFF7 /* QoderLogClient.swift */; };
 		19603256ADE889638AF0F1A3 /* UsageCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57966CEDE2F0E2EBF43CDCA1 /* UsageCardRenderer.swift */; };
 		1C12E0F24452CBE735D2C41D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27519CC2F435B5DB276ACC36 /* main.swift */; };
+		1C357C8663BF15875AEA180A /* BrandLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F9102413779B09A2480346 /* BrandLogoView.swift */; };
 		20785F3A780E830C7CB33CCB /* ImageAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F06F104E1BF95F00951024 /* ImageAPIClient.swift */; };
 		21F7C9D1552F47EF26F43C7F /* CodexLinxDisplayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4E784D5D9F2A8F6DA9F59D /* CodexLinxDisplayApp.swift */; };
 		2B34FDD52F051E7541B340C7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAE642680E0C1C25BC8F331 /* SettingsView.swift */; };
@@ -40,6 +42,7 @@
 		66DBEC97EEC8469D758F7535 /* UsageCardRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC162824EE74ABF8D2868960 /* UsageCardRendererTests.swift */; };
 		6CAE16DC3B98B0926F68B357 /* zh_CN.lproj in Resources */ = {isa = PBXBuildFile; fileRef = D50B5A671F9F66FB3DCDD241 /* zh_CN.lproj */; };
 		6F624A7F8B426038B367641D /* GrokCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78145063CFDF14686F4F63E6 /* GrokCardView.swift */; };
+		71E6AE685A47BDDA3B9EB3FC /* LocalNetworkAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95E16FB6870C57E47B8775A0 /* LocalNetworkAccess.swift */; };
 		7393B2E71423C7474703B39B /* QoderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21979514AAAC95FF50CD757 /* QoderCardView.swift */; };
 		7A8BD54862A6DAC76CC2F423 /* CodexActivityState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 495CC8E469ADC7965E6BAAD1 /* CodexActivityState.swift */; };
 		7D4754075467F197D99291CD /* UsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12DA604FF758ADCB6E850BC /* UsageCardView.swift */; };
@@ -110,11 +113,14 @@
 		787F3BE7B4769B1BF97165AB /* UsageSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshotTests.swift; sourceTree = "<group>"; };
 		7D47A330135F62E0572A526D /* ClaudeCodeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeCardView.swift; sourceTree = "<group>"; };
 		7E3617FC33595887FB1EFE37 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		95E16FB6870C57E47B8775A0 /* LocalNetworkAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNetworkAccess.swift; sourceTree = "<group>"; };
 		9923333557F59D96FE374FDB /* CodexActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexActivityTests.swift; sourceTree = "<group>"; };
+		A0B0F75745430B7CFD7642BB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1BFBE53B2CB746D5F7F92F0 /* GrokActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokActivityTests.swift; sourceTree = "<group>"; };
 		A21979514AAAC95FF50CD757 /* QoderCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderCardView.swift; sourceTree = "<group>"; };
 		A63D919C44854AAB303C5CCE /* en.lproj */ = {isa = PBXFileReference; path = en.lproj; sourceTree = "<group>"; };
 		AF3F912B3DCBBEF67524E28E /* TaskTrafficLight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskTrafficLight.swift; sourceTree = "<group>"; };
+		B2F9102413779B09A2480346 /* BrandLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandLogoView.swift; sourceTree = "<group>"; };
 		B8F06F104E1BF95F00951024 /* ImageAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAPIClient.swift; sourceTree = "<group>"; };
 		BC162824EE74ABF8D2868960 /* UsageCardRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardRendererTests.swift; sourceTree = "<group>"; };
 		C0E161EF3D5262E90F444877 /* QoderUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderUsageClientTests.swift; sourceTree = "<group>"; };
@@ -153,11 +159,13 @@
 				CC0F7DCF6008E7248128F9C0 /* AppBrand.swift */,
 				1508D6A6888DC3EDA401E663 /* AppGlassStyle.swift */,
 				C5A75D8776677D666E7C841F /* AppModel.swift */,
+				B2F9102413779B09A2480346 /* BrandLogoView.swift */,
 				58B9450D53C09EFBDFEDEA74 /* ClaudeCodeHookInstaller.swift */,
 				DA4F2C152644D3DFFE9DC776 /* CodexActivityMonitor.swift */,
 				CA2772AEC9F5602218A73551 /* CodexHookInstaller.swift */,
 				5C4E784D5D9F2A8F6DA9F59D /* CodexLinxDisplayApp.swift */,
 				65E2BD70D2DAA1E4947F5BD9 /* GrokActivityMonitor.swift */,
+				95E16FB6870C57E47B8775A0 /* LocalNetworkAccess.swift */,
 				0C0A9F7078CF4808E985B531 /* MenuBarContentView.swift */,
 				13AFE8C41E17BB48911D6426 /* QoderActivityMonitor.swift */,
 				1AAE642680E0C1C25BC8F331 /* SettingsView.swift */,
@@ -170,6 +178,7 @@
 		369EB19ED7C337CA57E9609E /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				A0B0F75745430B7CFD7642BB /* Assets.xcassets */,
 				A63D919C44854AAB303C5CCE /* en.lproj */,
 				D50B5A671F9F66FB3DCDD241 /* zh_CN.lproj */,
 			);
@@ -327,6 +336,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				134E00F49225548A74BB9E81 /* Assets.xcassets in Resources */,
 				99511856D0638A92CF6FD57C /* en.lproj in Resources */,
 				6CAE16DC3B98B0926F68B357 /* zh_CN.lproj in Resources */,
 			);
@@ -342,6 +352,7 @@
 				3B6F0E5105EB13FC091E3CD4 /* AppBrand.swift in Sources */,
 				C974B68FADD45DD67801E706 /* AppGlassStyle.swift in Sources */,
 				82FBC21E734E9AF253050637 /* AppModel.swift in Sources */,
+				1C357C8663BF15875AEA180A /* BrandLogoView.swift in Sources */,
 				FAAEB2A9E008C3F01B47EF60 /* ClaudeCodeCardView.swift in Sources */,
 				48CDB087825F5CF4FDEEBAE9 /* ClaudeCodeHookInstaller.swift in Sources */,
 				AB93CD8DD8A2A1498391C35E /* ClaudeCodeUsageClient.swift in Sources */,
@@ -357,6 +368,7 @@
 				83307B56540CD3987FCE1E0B /* GrokUsageClient.swift in Sources */,
 				387B818678E0C40752425642 /* GrokUsageSnapshot.swift in Sources */,
 				646B6A023008E112349EC240 /* ImageAPIClient.swift in Sources */,
+				71E6AE685A47BDDA3B9EB3FC /* LocalNetworkAccess.swift in Sources */,
 				FC98DB62A09F1CD67AB83E37 /* MenuBarContentView.swift in Sources */,
 				976557E5E7BE9FCB2E0002DA /* QoderActivityInterpreter.swift in Sources */,
 				394F592A017F66930EFCE1F2 /* QoderActivityMonitor.swift in Sources */,

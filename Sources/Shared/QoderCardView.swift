@@ -8,7 +8,9 @@ struct QoderCardView: View {
   let colorScheme: UsageCardColorScheme
   let design: UsageCardDesign
 
-  private var palette: UsageCardPalette { colorScheme.palette }
+  private var palette: UsageCardPalette {
+    colorScheme.palette(remainingPercent: creditSnapshot?.remainingPercent)
+  }
   private var layoutWidth: CGFloat {
     design.usesFullCanvas ? UsageCardLayout.width : 124
   }

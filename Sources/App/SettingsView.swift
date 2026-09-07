@@ -242,8 +242,13 @@ struct SettingsView: View {
       if selectedLinxPane == 0 {
         displayPane
       } else {
-        ScrollView { connectionPane }
-          .scrollIndicators(.hidden)
+        ScrollView {
+          connectionPane
+            .background(.clear)
+            .background(OverlayScrollChromeInstaller())
+        }
+          .scrollIndicators(.automatic)
+          .overlayScrollChrome()
       }
     }
   }
@@ -327,7 +332,7 @@ struct SettingsView: View {
             title: "配色",
             subtitle: colorSchemeSubtitle,
             symbol: "paintpalette",
-            tint: model.usageCardColorScheme.palette.accent
+            tint: selectedColorAccent
           ) {
             LazyVGrid(
               columns: [
@@ -347,7 +352,7 @@ struct SettingsView: View {
               title: "风格",
               subtitle: "选择信息的组织方式与视觉语言",
               symbol: "rectangle.3.group",
-              tint: model.usageCardColorScheme.palette.accent
+              tint: selectedColorAccent
             ) {
               LazyVGrid(
                 columns: [
@@ -423,8 +428,11 @@ struct SettingsView: View {
           }
         }
         .frame(maxWidth: .infinity)
+        .background(.clear)
+        .background(OverlayScrollChromeInstaller())
       }
-      .scrollIndicators(.hidden)
+      .scrollIndicators(.automatic)
+      .overlayScrollChrome()
       .frame(maxWidth: .infinity)
 
       previewCard
@@ -568,17 +576,21 @@ struct SettingsView: View {
       settingsCard(
         title: "任务监控展示",
         subtitle: "跟随当前选择的 AI，同步任务状态",
-        symbol: "circle.grid.3x1.fill",
+        symbol: "circle.grid.2x2.fill",
         tint: .indigo
       ) {
         Text("当前 AI")
           .font(.caption).foregroundStyle(.secondary)
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
           ForEach(DisplayMode.allCases.filter(\.isUsageMode)) { mode in
-            monitoringOption(title: mode.title, symbol: mode.symbol,
-              tint: monitoringTint(for: mode), isSelected: model.selectedAIMode == mode) {
-                model.setSelectedAI(mode)
-              }
+            monitoringOption(
+              title: mode.title,
+              mode: mode,
+              tint: monitoringTint(for: mode),
+              isSelected: model.selectedAIMode == mode
+            ) {
+              model.setSelectedAI(mode)
+            }
           }
         }
         Toggle("状态栏展示任务监控", isOn: $model.showTaskStatusInMenuBar)
@@ -966,6 +978,7 @@ struct SettingsView: View {
         content()
       }
       .padding(17)
+      .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
   }
 
@@ -1010,17 +1023,45 @@ struct SettingsView: View {
   }
 
   private func monitoringOption(
+    title: String, mode: DisplayMode, tint: Color, isSelected: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
+    monitoringOption(
+      title: title,
+      icon: AnyView(BrandLogoView(mode: mode, size: 30)),
+      tint: tint,
+      isSelected: isSelected,
+      action: action
+    )
+  }
+
+  private func monitoringOption(
     title: String, symbol: String, tint: Color, isSelected: Bool,
     action: @escaping () -> Void
   ) -> some View {
-    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-    return Button(action: action) {
-      HStack(spacing: 8) {
+    monitoringOption(
+      title: title,
+      icon: AnyView(
         Image(systemName: symbol)
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(tint)
           .frame(width: 30, height: 30)
           .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+      ),
+      tint: tint,
+      isSelected: isSelected,
+      action: action
+    )
+  }
+
+  private func monitoringOption(
+    title: String, icon: AnyView, tint: Color, isSelected: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
+    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    return Button(action: action) {
+      HStack(spacing: 8) {
+        icon
         Text(title)
           .font(.caption.weight(.semibold))
           .foregroundStyle(.primary)
@@ -1057,6 +1098,7 @@ struct SettingsView: View {
   private func usageColorOption(_ colorScheme: UsageCardColorScheme) -> some View {
     let isSelected = model.usageCardColorScheme == colorScheme
     let palette = colorScheme.palette
+    let swatches = colorScheme.previewSwatches
     let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
     return Button {
@@ -1065,11 +1107,11 @@ struct SettingsView: View {
       HStack(spacing: 10) {
         ZStack {
           RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(palette.background)
+            .fill(colorOptionIconFill(colorScheme, palette: palette))
 
           Image(systemName: colorScheme.symbol)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(palette.accent)
+            .foregroundStyle(colorScheme == .rainbow ? Color.white : palette.accent)
         }
         .frame(width: 34, height: 34)
         .overlay {
@@ -1077,21 +1119,23 @@ struct SettingsView: View {
             .stroke(palette.border, lineWidth: 1)
         }
 
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
           Text(colorScheme.title)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.primary)
 
-          HStack(spacing: 4) {
+          HStack(spacing: 6) {
             HStack(spacing: 2) {
-              Circle().fill(palette.accent)
-              Circle().fill(palette.primaryText)
+              ForEach(Array(swatches.enumerated()), id: \.offset) { _, color in
+                Circle().fill(color)
+              }
             }
-            .frame(width: 12, height: 5)
+            .frame(width: CGFloat(swatches.count * 6), height: 5)
 
             Text(colorScheme.subtitle)
               .font(.caption2)
               .foregroundStyle(.secondary)
+              .lineLimit(1)
           }
         }
 
@@ -1119,7 +1163,7 @@ struct SettingsView: View {
 
   private func usageDesignOption(_ design: UsageCardDesign) -> some View {
     let isSelected = model.usageCardDesign == design
-    let tint = model.usageCardColorScheme.palette.accent
+    let tint = selectedColorAccent
     let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
     return Button {
@@ -1261,6 +1305,39 @@ struct SettingsView: View {
     case .grok: return "选择 Grok 卡片的色彩方案"
     case .customImage: return "选择卡片的色彩方案"
     }
+  }
+
+  private var selectedColorAccent: Color {
+    model.usageCardColorScheme.palette(remainingPercent: liveRemainingPercent).accent
+  }
+
+  private var liveRemainingPercent: Int? {
+    switch model.displayMode {
+    case .codex:
+      return model.snapshot?.remainingPercent
+    case .grok:
+      return model.grokSnapshot?.remainingPercent
+    case .qoder:
+      return model.qoderCreditSnapshot?.remainingPercent
+    case .claudeCode, .customImage:
+      return nil
+    }
+  }
+
+  private func colorOptionIconFill(
+    _ colorScheme: UsageCardColorScheme,
+    palette: UsageCardPalette
+  ) -> AnyShapeStyle {
+    if colorScheme == .rainbow {
+      return AnyShapeStyle(
+        LinearGradient(
+          colors: colorScheme.previewSwatches,
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
+    }
+    return AnyShapeStyle(palette.background)
   }
 
   private var connectionSymbol: String {

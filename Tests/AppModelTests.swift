@@ -74,6 +74,14 @@ final class AppModelTests: XCTestCase {
     XCTAssertEqual(restored.selectedAIMode, .claudeCode)
   }
 
+  func testUsageModesHaveBrandLogoAssets() throws {
+    for mode in DisplayMode.allCases where mode.isUsageMode {
+      let name = try XCTUnwrap(mode.logoAssetName)
+      XCTAssertNotNil(NSImage(named: name), "\(mode.title) 缺少品牌 logo 资源 \(name)")
+    }
+    XCTAssertNil(DisplayMode.customImage.logoAssetName)
+  }
+
   @MainActor
   func testReorganizedSettingsPanesRender() throws {
     XCTAssertEqual(SettingsPane.allCases.map(\.title), ["状态监控", "Linx68推送", "通用"])
@@ -314,7 +322,10 @@ final class AppModelTests: XCTestCase {
       let uploadCount = await imageClient.uploadCount
       return fetchCount == 1 && uploadCount == 1
     }
-    XCTAssertTrue(initialSyncCompleted)
+    XCTAssertTrue(
+      initialSyncCompleted,
+      "AI 用量模式下启动应立即读取状态并推送到键盘"
+    )
     XCTAssertEqual(model.keyboardConnectionState, .connected)
     XCTAssertEqual(model.usageQueryState, .succeeded)
 
@@ -350,6 +361,57 @@ final class AppModelTests: XCTestCase {
 
     model.endpoint = "http://192.168.31.72/image/upload"
     XCTAssertEqual(model.keyboardConnectionState, .disconnected)
+  }
+
+  @MainActor
+  func testInitialPushRetriesLocalNetworkDenialThenSucceeds() async throws {
+    let suiteName = "AppModelTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let imageClient = FlakyLocalNetworkImageClient(failuresBeforeSuccess: 5)
+    let model = AppModel(
+      defaults: defaults,
+      codexClient: FakeCodexClient(),
+      imageAPIClient: imageClient,
+      localNetworkRetryDelayNanoseconds: 10_000_000,
+      localNetworkRetryWindowNanoseconds: 1_000_000_000
+    )
+
+    model.start()
+    let completed = await waitUntil {
+      await imageClient.uploadCount >= 6 && model.lastUploadDate != nil
+    }
+    XCTAssertTrue(completed)
+    XCTAssertNil(model.lastError)
+    XCTAssertEqual(model.keyboardConnectionState, .connected)
+    XCTAssertNotNil(model.lastUploadDate)
+  }
+
+  @MainActor
+  func testInitialPushGivesUpAfterLocalNetworkRetryWindow() async throws {
+    let suiteName = "AppModelTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let imageClient = FlakyLocalNetworkImageClient(failuresBeforeSuccess: 100)
+    let model = AppModel(
+      defaults: defaults,
+      codexClient: FakeCodexClient(),
+      imageAPIClient: imageClient,
+      localNetworkRetryDelayNanoseconds: 10_000_000,
+      localNetworkRetryWindowNanoseconds: 40_000_000
+    )
+
+    await model.synchronize(upload: true, forceUpload: true)
+    let uploadCount = await imageClient.uploadCount
+    XCTAssertGreaterThanOrEqual(uploadCount, 2)
+    XCTAssertNotNil(model.lastError)
+    XCTAssertEqual(model.statusText, "推送失败")
+    XCTAssertNil(model.lastUploadDate)
+    XCTAssertEqual(model.usageQueryState, .succeeded)
   }
 
   @MainActor
@@ -714,6 +776,23 @@ private enum TestError: LocalizedError {
   case queryFailed
 
   var errorDescription: String? { "测试查询失败" }
+}
+
+private actor FlakyLocalNetworkImageClient: ImageUploading {
+  private let failuresBeforeSuccess: Int
+  private(set) var uploadCount = 0
+
+  init(failuresBeforeSuccess: Int) {
+    self.failuresBeforeSuccess = failuresBeforeSuccess
+  }
+
+  func upload(_ imageData: Data, endpoint: String) async throws -> ImageUploadResult {
+    uploadCount += 1
+    if uploadCount <= failuresBeforeSuccess {
+      throw ImageAPIError.networkUnavailable
+    }
+    return ImageUploadResult(statusCode: 200, responseText: "OK")
+  }
 }
 
 private actor FakeImageClient: ImageUploading {

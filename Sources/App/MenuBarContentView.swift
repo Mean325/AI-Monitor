@@ -92,15 +92,7 @@ struct MenuBarContentView: View {
 
   private var header: some View {
     HStack {
-      ZStack {
-        RoundedRectangle(cornerRadius: 12)
-          .fill(LinearGradient(colors: [.teal.opacity(0.2), .blue.opacity(0.1)],
-            startPoint: .topLeading, endPoint: .bottomTrailing))
-          .frame(width: 36, height: 36)
-        Image(systemName: "waveform.path.ecg")
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(.teal)
-      }
+      BrandLogoView(mode: model.selectedAIMode, size: 36)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(AppBrand.displayName)
