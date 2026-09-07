@@ -419,6 +419,30 @@ final class AppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testExhaustedCodexUsageForcesRedLightWhileTaskIsRunning() async throws {
+    let suiteName = "AppModelTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let activityMonitor = FakeCodexActivityMonitor()
+    let model = AppModel(
+      defaults: defaults,
+      codexClient: ExhaustedCodexClient(),
+      imageAPIClient: FakeImageClient(),
+      activityMonitor: activityMonitor
+    )
+
+    await model.synchronize(upload: false, forceUpload: false)
+    XCTAssertEqual(model.codexActivityState, .toolFailed)
+    XCTAssertEqual(TaskTrafficLight.activeIndex(state: model.codexActivityState, mode: .codex), 0)
+
+    activityMonitor.send(.running)
+    XCTAssertEqual(model.codexActivityState, .toolFailed)
+    XCTAssertEqual(TaskTrafficLight.activeIndex(state: model.codexActivityState, mode: .codex), 0)
+  }
+
+  @MainActor
   func testReachableKeyboardWithRejectedPushShowsDimmedLogo() async throws {
     let suiteName = "AppModelTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -651,6 +675,20 @@ private actor FakeCodexClient: CodexRateLimitFetching {
   func fetch() async throws -> UsageSnapshot {
     fetchCount += 1
     return .sample
+  }
+}
+
+private actor ExhaustedCodexClient: CodexRateLimitFetching {
+  func fetch() async throws -> UsageSnapshot {
+    UsageSnapshot(
+      remainingPercent: 0,
+      resetDate: Date().addingTimeInterval(3600),
+      windowMinutes: 10_080,
+      availableResetCount: 0,
+      planType: "plus",
+      fiveHourRemainingPercent: 0,
+      fiveHourResetDate: Date().addingTimeInterval(300)
+    )
   }
 }
 

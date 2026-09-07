@@ -198,19 +198,14 @@ private final class CodexSessionLogActivityReader {
         let secondary: Window?
         let credits: Credits?
 
-        var hasAvailableQuota: Bool {
+        var isMeaningfulCodexQuota: Bool {
           guard limit_id == nil || limit_id == "codex" else { return false }
-          if credits?.has_credits == true || credits?.unlimited == true { return true }
-          let windows = [primary, secondary].compactMap { $0 }
-          return !windows.isEmpty && windows.allSatisfy {
-            guard let used = $0.used_percent else { return false }
-            return used < 100
-          }
+          return primary != nil || secondary != nil
         }
 
         var exhaustedWindow: Window? {
-          guard limit_id == nil || limit_id == "codex",
-            credits?.has_credits == false, credits?.unlimited != true else { return nil }
+          guard isMeaningfulCodexQuota,
+            credits?.has_credits != true, credits?.unlimited != true else { return nil }
           return [primary, secondary].compactMap { $0 }
             .filter { ($0.used_percent ?? 0) >= 100 }
             .max { ($0.resets_at ?? .greatestFiniteMagnitude) < ($1.resets_at ?? .greatestFiniteMagnitude) }
@@ -304,56 +299,101 @@ private final class CodexSessionLogActivityReader {
         return nil
       }
 
-      if let record = latestRecord(in: carriedData, sessionID: url.lastPathComponent) {
-        return record
+      let parsed = parseActivity(in: carriedData, sessionID: url.lastPathComponent)
+      if parsed.sawMeaningfulQuota || startOffset == 0 {
+        return parsed.record
       }
       endOffset = startOffset
     }
     return nil
   }
 
-  private func latestRecord(in data: Data, sessionID: String) -> CodexActivityRecord? {
+  private func parseActivity(in data: Data, sessionID: String) -> (
+    record: CodexActivityRecord?, sawMeaningfulQuota: Bool
+  ) {
     let decoder = JSONDecoder()
-    var quotaRecovered = false
+    var latestLifecycle: CodexActivityRecord?
+    var exhaustedRecord: CodexActivityRecord?
+    var expiredRecord: CodexActivityRecord?
+    var sawMeaningfulQuota = false
+    var lifecycleNewerThanQuota = false
+
     for line in data.split(separator: 0x0A).reversed() {
-      if let envelope = try? decoder.decode(SessionEnvelope.self, from: Data(line)),
-        envelope.type == "event_msg", envelope.payload?.type == "token_count",
-        envelope.payload?.rateLimits?.hasAvailableQuota == true
-      {
-        quotaRecovered = true
-      }
       guard
         let envelope = try? decoder.decode(SessionEnvelope.self, from: Data(line)),
         envelope.type == "event_msg",
         let eventName = envelope.payload?.type,
         let payload = envelope.payload,
-        let state = state(for: payload),
         let updatedAt = parseDate(envelope.timestamp)
       else {
         continue
       }
-      return CodexActivityRecord(
-        schemaVersion: 2,
-        sessionID: sessionID,
-        turnID: envelope.payload?.turnID,
-        eventName: eventName,
-        state: quotaRecovered && state == .toolFailed ? .idle : state,
-        updatedAt: updatedAt
+
+      if !sawMeaningfulQuota,
+        eventName == "token_count",
+        let limits = payload.rateLimits,
+        limits.isMeaningfulCodexQuota
+      {
+        sawMeaningfulQuota = true
+        if let window = limits.exhaustedWindow {
+          let resetPassed = window.resets_at.map { $0 <= Date().timeIntervalSince1970 } ?? false
+          let record = CodexActivityRecord(
+            schemaVersion: 2,
+            sessionID: sessionID,
+            turnID: payload.turnID,
+            eventName: eventName,
+            state: resetPassed ? .idle : .toolFailed,
+            updatedAt: updatedAt
+          )
+          if resetPassed {
+            expiredRecord = record
+          } else {
+            exhaustedRecord = record
+          }
+        }
+      }
+
+      if latestLifecycle == nil, let state = lifecycleState(for: payload) {
+        latestLifecycle = CodexActivityRecord(
+          schemaVersion: 2,
+          sessionID: sessionID,
+          turnID: payload.turnID,
+          eventName: eventName,
+          state: state,
+          updatedAt: updatedAt
+        )
+        lifecycleNewerThanQuota = !sawMeaningfulQuota
+      }
+
+      if latestLifecycle != nil, sawMeaningfulQuota { break }
+    }
+
+    if let exhaustedRecord {
+      return (exhaustedRecord, true)
+    }
+    if let expiredRecord, !lifecycleNewerThanQuota {
+      return (expiredRecord, true)
+    }
+    if sawMeaningfulQuota, latestLifecycle?.state == .toolFailed, !lifecycleNewerThanQuota {
+      return (
+        CodexActivityRecord(
+          schemaVersion: 2,
+          sessionID: sessionID,
+          turnID: latestLifecycle?.turnID,
+          eventName: latestLifecycle?.eventName ?? "token_count",
+          state: .idle,
+          updatedAt: latestLifecycle?.updatedAt ?? Date()
+        ),
+        true
       )
     }
-    return nil
+    return (latestLifecycle, sawMeaningfulQuota)
   }
 
-  private func state(for payload: SessionEnvelope.Payload) -> CodexActivityState? {
+  private func lifecycleState(for payload: SessionEnvelope.Payload) -> CodexActivityState? {
     switch payload.type {
     case "task_started": return .running
     case "task_complete", "turn_aborted": return .finished
-    case "token_count":
-      guard let window = payload.rateLimits?.exhaustedWindow else { return nil }
-      // No completion event may follow an exhausted quota. Treat it as failure
-      // for both consumers of this monitor, until reset or a new task event.
-      if let reset = window.resets_at, reset <= Date().timeIntervalSince1970 { return .idle }
-      return .toolFailed
     case "error":
       let message = payload.message?.lowercased() ?? ""
       if ["usage limit", "usage_limit", "quota", "用量", "额度"].contains(where: message.contains) {

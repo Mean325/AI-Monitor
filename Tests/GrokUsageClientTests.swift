@@ -12,7 +12,7 @@ final class GrokUsageClientTests: XCTestCase {
     XCTAssertEqual(snapshot.remainingPercent, 92)
     XCTAssertEqual(snapshot.usedPercent, 8)
     XCTAssertEqual(snapshot.windowTitle, "本周剩余")
-    XCTAssertEqual(snapshot.planDisplayName, "Grok Pro")
+    XCTAssertEqual(snapshot.planDisplayName, "SuperGrok")
     XCTAssertEqual(snapshot.periodType, .weekly)
     XCTAssertNotNil(snapshot.periodEnd)
     XCTAssertNotEqual(snapshot.remainingPercent, Int(snapshot.usedPercent))
@@ -137,6 +137,15 @@ final class GrokUsageClientTests: XCTestCase {
     XCTAssertThrowsError(try GrokUsageClient.parseCredential(from: Data("{}".utf8))) { error in
       XCTAssertEqual(error as? GrokClientError, .authInvalid)
     }
+  }
+
+  func testPlanDisplayNameMapsApiTiersToConsumerNames() {
+    XCTAssertEqual(GrokUsageSnapshot.planDisplayName(for: "GrokPro"), "SuperGrok")
+    XCTAssertEqual(GrokUsageSnapshot.planDisplayName(for: "SuperGrok"), "SuperGrok")
+    XCTAssertEqual(GrokUsageSnapshot.planDisplayName(for: "SuperGrokPlus"), "SuperGrok Plus")
+    XCTAssertEqual(GrokUsageSnapshot.planDisplayName(for: "SuperGrokHeavy"), "SuperGrok Heavy")
+    XCTAssertEqual(GrokUsageSnapshot.planDisplayName(for: "GrokFree"), "Free")
+    XCTAssertEqual(GrokUsageSnapshot.planDisplayName(for: nil), "未知套餐")
   }
 
   func testSampleCardExposesRemainingNotUsed() {

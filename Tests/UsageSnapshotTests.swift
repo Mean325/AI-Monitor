@@ -61,4 +61,37 @@ final class UsageSnapshotTests: XCTestCase {
     XCTAssertEqual(snapshot.windowTitle, "5 小时剩余")
     XCTAssertEqual(snapshot.windowDescription, "5 小时周期")
   }
+
+  func testQuotaExhaustedWhenWeeklyOrFiveHourRemainingIsZero() {
+    XCTAssertTrue(
+      UsageSnapshot(
+        remainingPercent: 0,
+        resetDate: nil,
+        windowMinutes: 10_080,
+        availableResetCount: 0,
+        planType: "plus"
+      ).isQuotaExhausted
+    )
+    XCTAssertTrue(
+      UsageSnapshot(
+        remainingPercent: 24,
+        resetDate: nil,
+        windowMinutes: 10_080,
+        availableResetCount: 0,
+        planType: "plus",
+        fiveHourRemainingPercent: 0
+      ).isQuotaExhausted
+    )
+    XCTAssertFalse(
+      UsageSnapshot(
+        remainingPercent: 24,
+        resetDate: nil,
+        windowMinutes: 10_080,
+        availableResetCount: 0,
+        planType: "plus",
+        fiveHourRemainingPercent: 12
+      ).isQuotaExhausted
+    )
+    XCTAssertFalse(UsageSnapshot.sample.isQuotaExhausted)
+  }
 }

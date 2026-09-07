@@ -40,7 +40,6 @@ struct SettingsView: View {
     }
     .frame(width: 890, height: 760)
     .background(Color(nsColor: .windowBackgroundColor))
-    .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: activePane)
   }
 
   private var activePane: SettingsPane {
@@ -70,15 +69,18 @@ struct SettingsView: View {
     VStack(spacing: 0) {
       brandHeader
 
-      AppGlassGroup {
-      VStack(spacing: 6) {
-        ForEach(SettingsPane.allCases) { pane in
-          sidebarItem(pane)
+      ZStack(alignment: .top) {
+        selectedSidebarGlass
+          .offset(y: CGFloat(selectedSidebarIndex) * (sidebarItemHeight + sidebarItemSpacing))
+
+        VStack(spacing: sidebarItemSpacing) {
+          ForEach(SettingsPane.allCases) { pane in
+            sidebarItem(pane)
+          }
         }
       }
       .padding(.horizontal, 10)
       .padding(.top, 8)
-      }
 
       Spacer(minLength: 16)
     }
@@ -119,37 +121,59 @@ struct SettingsView: View {
     .padding(.bottom, 14)
   }
 
+  private let sidebarItemHeight: CGFloat = 42
+  private let sidebarItemSpacing: CGFloat = 6
+
+  private var selectedSidebarIndex: Int {
+    SettingsPane.allCases.firstIndex(of: selectedPane) ?? 0
+  }
+
+  private var sidebarSelectionAnimation: Animation? {
+    reduceMotion ? nil : .easeInOut(duration: 0.2)
+  }
+
+  @ViewBuilder
+  private var selectedSidebarGlass: some View {
+    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    Group {
+      if #available(macOS 26.0, *), !reduceTransparency {
+        Color.clear
+          .glassEffect(.regular.interactive(), in: shape)
+      } else {
+        shape.fill(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.08))
+      }
+    }
+    .frame(height: sidebarItemHeight)
+    .allowsHitTesting(false)
+  }
+
   private func sidebarItem(_ pane: SettingsPane) -> some View {
-    Button {
-      selectedPane = pane
+    let isSelected = selectedPane == pane
+    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
+    return Button {
+      withAnimation(sidebarSelectionAnimation) {
+        selectedPane = pane
+      }
     } label: {
       HStack(spacing: 11) {
         Image(systemName: pane.symbol)
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(selectedPane == pane ? pane.tint : .secondary)
+          .foregroundStyle(isSelected ? pane.tint : .secondary)
           .frame(width: 26, height: 26)
-          .background(
-            selectedPane == pane ? pane.tint.opacity(0.12) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-          )
 
         Text(pane.title)
-          .font(.system(size: 13, weight: selectedPane == pane ? .semibold : .medium))
+          .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+          .foregroundStyle(.primary)
 
         Spacer(minLength: 0)
       }
-      .foregroundStyle(.primary)
       .padding(.horizontal, 10)
-      .frame(height: 42)
-      .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-      .background {
-        if selectedPane == pane {
-          selectedSidebarBackground(tint: pane.tint)
-        }
-      }
+      .frame(height: sidebarItemHeight)
+      .contentShape(shape)
     }
     .buttonStyle(.plain)
-    .accessibilityAddTraits(selectedPane == pane ? .isSelected : [])
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   private var keyboardStatusBadge: some View {
@@ -887,6 +911,9 @@ struct SettingsView: View {
     ZStack {
       if reduceTransparency {
         Color(nsColor: .windowBackgroundColor)
+      } else if #available(macOS 26.0, *) {
+        // NSVisualEffectView in the sidebar blocks Liquid Glass sampling.
+        Color.primary.opacity(colorScheme == .dark ? 0.07 : 0.035)
       } else {
         AppFrostedBackdrop(material: .sidebar, blendingMode: .behindWindow)
       }
@@ -898,21 +925,6 @@ struct SettingsView: View {
       )
     }
     .ignoresSafeArea()
-  }
-
-  @ViewBuilder
-  private func selectedSidebarBackground(tint: Color) -> some View {
-    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-
-    if #available(macOS 26.0, *), !reduceTransparency {
-      Color.clear
-        .glassEffect(.regular.tint(tint.opacity(0.1)), in: shape)
-        .overlay { shape.stroke(.white.opacity(0.08), lineWidth: 0.5) }
-    } else {
-      shape
-        .fill(tint.opacity(0.1))
-        .overlay { shape.stroke(Color.primary.opacity(0.08), lineWidth: 1) }
-    }
   }
 
   private func settingsCard<Content: View>(

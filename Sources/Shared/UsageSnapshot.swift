@@ -10,6 +10,10 @@ struct UsageSnapshot: Equatable, Sendable {
   var fiveHourRemainingPercent: Int? = nil
   var fiveHourResetDate: Date? = nil
 
+  var isQuotaExhausted: Bool {
+    remainingPercent <= 0 || fiveHourRemainingPercent.map { $0 <= 0 } ?? false
+  }
+
   var windowTitle: String {
     guard let windowMinutes else { return "周期剩余" }
     if windowMinutes >= 10_080 { return "本周剩余" }

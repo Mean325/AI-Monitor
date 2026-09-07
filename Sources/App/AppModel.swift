@@ -125,7 +125,7 @@ final class AppModel: ObservableObject {
     switch displayMode {
     case .codex:
       activityMonitor.refresh()
-      codexActivityState = activityMonitor.state
+      applyCodexActivity(activityMonitor.state)
     case .claudeCode:
       claudeActivityMonitor.refresh()
       claudeActivityState = claudeActivityMonitor.state
@@ -298,7 +298,7 @@ final class AppModel: ObservableObject {
     activityMonitor.onEventObserved = { [weak self] date in
       self?.handleCodexHookEvent(date)
     }
-    codexActivityState = activityMonitor.state
+    applyCodexActivity(activityMonitor.state)
     if let lastEventDate = activityMonitor.lastEventDate {
       handleCodexHookEvent(lastEventDate)
     }
@@ -421,7 +421,7 @@ final class AppModel: ObservableObject {
     switch selectedAIMode {
     case .codex:
       activityMonitor.start()
-      codexActivityState = activityMonitor.state
+      applyCodexActivity(activityMonitor.state)
     case .claudeCode:
       claudeActivityMonitor.start()
       claudeActivityState = claudeActivityMonitor.state
@@ -626,6 +626,7 @@ final class AppModel: ObservableObject {
         didCompleteQuery = true
         usageQueryState = .succeeded
         snapshot = latestSnapshot
+        applyCodexActivity(activityMonitor.state)
         lastRefreshDate = Date()
         rendered = try UsageCardRenderer.render(
           snapshot: latestSnapshot,
@@ -824,11 +825,18 @@ final class AppModel: ObservableObject {
   }
 
   private func handleCodexActivityChange(_ state: CodexActivityState) {
-    guard codexActivityState != state else { return }
-    codexActivityState = state
-    updatePreview()
+    applyCodexActivity(state, uploadIfChanged: true)
+  }
 
-    guard hasStarted, displayMode == .codex else { return }
+  private func applyCodexActivity(
+    _ state: CodexActivityState,
+    uploadIfChanged: Bool = false
+  ) {
+    let resolved = snapshot?.isQuotaExhausted == true ? .toolFailed : state
+    guard codexActivityState != resolved else { return }
+    codexActivityState = resolved
+    updatePreview()
+    guard uploadIfChanged, hasStarted, displayMode == .codex else { return }
     scheduleCodexActivityUpload()
   }
 

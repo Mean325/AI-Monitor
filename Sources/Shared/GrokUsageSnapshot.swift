@@ -41,16 +41,27 @@ struct GrokUsageSnapshot: Equatable, Sendable {
   }
 
   var planDisplayName: String {
-    guard let subscriptionTier, !subscriptionTier.isEmpty else { return "未知套餐" }
-    let spaced = subscriptionTier.replacingOccurrences(
-      of: "([a-z])([A-Z])",
-      with: "$1 $2",
-      options: .regularExpression
-    )
-    if spaced.lowercased() == "grokpro" || spaced == "Grok Pro" {
-      return "Grok Pro"
+    Self.planDisplayName(for: subscriptionTier)
+  }
+
+  static func planDisplayName(for tier: String?) -> String {
+    guard let tier, !tier.isEmpty else { return "未知套餐" }
+    switch tier.replacingOccurrences(of: " ", with: "").lowercased() {
+    case "grokpro", "supergrok":
+      return "SuperGrok"
+    case "grokplus", "supergrokplus":
+      return "SuperGrok Plus"
+    case "grokheavy", "supergrokheavy":
+      return "SuperGrok Heavy"
+    case "grokfree", "free":
+      return "Free"
+    default:
+      return tier.replacingOccurrences(
+        of: "([a-z])([A-Z])",
+        with: "$1 $2",
+        options: .regularExpression
+      )
     }
-    return spaced
   }
 
   var compactPlanName: String {

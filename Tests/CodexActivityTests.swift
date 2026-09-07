@@ -26,8 +26,8 @@ final class CodexActivityTests: XCTestCase {
     let recovered = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":0},"secondary":{"used_percent":43},"credits":{"has_credits":false}}}}"#
     try Data((start + "\n" + quota(credits: false, resetAt: reset) + "\n" + recovered + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .idle)
-    XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 2)
+    XCTAssertEqual(monitor.state, .running)
+    XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 1)
     for line in [quota(credits: true, resetAt: reset),
                  quota(credits: false, unlimited: true, resetAt: reset)] {
       try Data((start + "\n" + line + "\n").utf8).write(to: url)
@@ -39,9 +39,44 @@ final class CodexActivityTests: XCTestCase {
     XCTAssertEqual(monitor.state, .idle)
     try Data((start + "\n" + quota(credits: false, resetAt: reset) + "\n" + start + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .running)
+    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 0)
     let error = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"error","message":"You have hit your usage limit"}}"#
     try Data((start + "\n" + error + "\n").utf8).write(to: url)
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .toolFailed)
+  }
+
+  @MainActor
+  func testExhaustedQuotaStaysRedThroughLaterTaskEvents() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let sessions = root.appendingPathComponent("sessions")
+    try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = sessions.appendingPathComponent("session.jsonl")
+    let date = ISO8601DateFormatter().string(from: Date())
+    let reset = Int(Date().addingTimeInterval(3600).timeIntervalSince1970)
+    let start = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"task_started","turn_id":"1"}}"#
+    let complete = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"task_complete","turn_id":"1"}}"#
+    let exhausted = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":36.0,"resets_at":\#(reset)},"secondary":{"used_percent":100.0,"resets_at":\#(reset)},"credits":{"has_credits":false,"unlimited":false}}}}"#
+    let premium = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"premium","primary":null,"secondary":null,"credits":{"has_credits":false,"unlimited":false}}}}"#
+    let missingCredits = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":100.0,"resets_at":\#(reset)}}}}"#
+    let monitor = CodexActivityMonitor(
+      directoryURL: root.appendingPathComponent("hooks"),
+      sessionsDirectoryURL: sessions
+    )
+
+    try Data((start + "\n" + exhausted + "\n" + premium + "\n" + complete + "\n").utf8).write(to: url)
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 0)
+
+    try Data((start + "\n" + exhausted + "\n" + premium + "\n" + complete + "\n" + start + "\n").utf8)
+      .write(to: url)
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .toolFailed)
+
+    try Data((start + "\n" + missingCredits + "\n" + complete + "\n").utf8).write(to: url)
     monitor.refresh()
     XCTAssertEqual(monitor.state, .toolFailed)
   }
