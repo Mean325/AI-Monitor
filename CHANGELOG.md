@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 修复 Codex 任务结束后残留的运行记录仍使任务灯显示黄色的问题。
 - 修复 Grok 任务灯：仅在 CLI 正在执行 turn/工具时显示黄灯，打开 Grok CLI 但空闲时为绿灯。
 - 修复 Grok 套餐名：接口中的 GrokPro 展示为 SuperGrok。
 - 设置侧栏选中项使用系统 Liquid Glass，切换时在选项间平移，不再做玻璃形变。

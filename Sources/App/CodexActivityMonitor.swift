@@ -30,6 +30,7 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
   private let directoryURL: URL
   private let staleInterval: TimeInterval
   private let completedHoldInterval: TimeInterval
+  private let orphanedHookGraceInterval: TimeInterval
   private let fileManager: FileManager
   private let sessionLogReader: CodexSessionLogActivityReader?
   private let eventQueue = DispatchQueue(
@@ -45,11 +46,13 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
     sessionsDirectoryURL: URL? = defaultCodexSessionsDirectoryURL,
     staleInterval: TimeInterval = 12 * 60 * 60,
     completedHoldInterval: TimeInterval = 10,
+    orphanedHookGraceInterval: TimeInterval = 2 * 60,
     fileManager: FileManager = .default
   ) {
     self.directoryURL = directoryURL
     self.staleInterval = staleInterval
     self.completedHoldInterval = completedHoldInterval
+    self.orphanedHookGraceInterval = orphanedHookGraceInterval
     self.fileManager = fileManager
     self.sessionLogReader = sessionsDirectoryURL.map {
       CodexSessionLogActivityReader(directoryURL: $0, fileManager: fileManager)
@@ -109,7 +112,10 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
     let sessionRecords = sessionLogReader?.records(
       modifiedAfter: Date().addingTimeInterval(-staleInterval)
     ) ?? []
-    let records = hookRecords + sessionRecords
+    let records = reconciledRecords(
+      hookRecords: hookRecords,
+      sessionRecords: sessionRecords
+    )
 
     updateLastEventDate(hookRecords.map(\.updatedAt).max())
     updateState(
@@ -119,6 +125,40 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
         completedHoldInterval: completedHoldInterval
       )
     )
+  }
+
+  private func reconciledRecords(
+    hookRecords: [CodexActivityRecord],
+    sessionRecords: [CodexActivityRecord],
+    now: Date = Date()
+  ) -> [CodexActivityRecord] {
+    guard sessionLogReader != nil else { return hookRecords }
+
+    let sessionRecordsByID = Dictionary(
+      grouping: sessionRecords,
+      by: \CodexActivityRecord.sessionID
+    )
+
+    let activeHookRecords = hookRecords.filter { hookRecord in
+      guard hookRecord.state == .running else { return true }
+
+      let matchingSessionRecords = sessionRecordsByID[hookRecord.sessionID] ?? []
+      if matchingSessionRecords.contains(where: {
+        $0.state == .finished && $0.updatedAt >= hookRecord.updatedAt
+      }) {
+        return false
+      }
+
+      // Hooks occasionally miss Stop/SessionEnd when a task is interrupted,
+      // deleted, or moved. Session JSONL is the durable source of truth; keep
+      // an unmatched hook briefly to cover log creation, then discard it so a
+      // dead session cannot leave the traffic light yellow for 12 hours.
+      let age = now.timeIntervalSince(hookRecord.updatedAt)
+      if age <= orphanedHookGraceInterval { return true }
+      return matchingSessionRecords.contains { $0.state == .running }
+    }
+
+    return activeHookRecords + sessionRecords
   }
 
   private func startDirectorySource() {
@@ -267,7 +307,10 @@ private final class CodexSessionLogActivityReader {
         continue
       }
 
-      let record = readLatestRecord(from: url)
+      let record = readLatestRecord(
+        from: url,
+        sessionID: sessionID(from: url)
+      )
       cache[url] = CachedRecord(
         fileSize: fileSize,
         modificationDate: modificationDate,
@@ -280,7 +323,7 @@ private final class CodexSessionLogActivityReader {
     return records
   }
 
-  private func readLatestRecord(from url: URL) -> CodexActivityRecord? {
+  private func readLatestRecord(from url: URL, sessionID: String) -> CodexActivityRecord? {
     guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
     defer { try? handle.close() }
 
@@ -299,13 +342,21 @@ private final class CodexSessionLogActivityReader {
         return nil
       }
 
-      let parsed = parseActivity(in: carriedData, sessionID: url.lastPathComponent)
+      let parsed = parseActivity(in: carriedData, sessionID: sessionID)
       if parsed.sawMeaningfulQuota || startOffset == 0 {
         return parsed.record
       }
       endOffset = startOffset
     }
     return nil
+  }
+
+  private func sessionID(from url: URL) -> String {
+    let stem = url.deletingPathExtension().lastPathComponent
+    guard stem.count >= 36 else { return url.lastPathComponent }
+    let candidate = String(stem.suffix(36))
+    guard UUID(uuidString: candidate) != nil else { return url.lastPathComponent }
+    return candidate.lowercased()
   }
 
   private func parseActivity(in data: Data, sessionID: String) -> (

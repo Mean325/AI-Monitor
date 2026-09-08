@@ -261,6 +261,99 @@ final class CodexActivityTests: XCTestCase {
     monitor.stop()
   }
 
+  @MainActor
+  func testCompletedSessionOverridesOlderRunningHookFromSameSession() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent("codex-session-reconcile-\(UUID().uuidString)", isDirectory: true)
+    let activityDirectory = root.appendingPathComponent("activity", isDirectory: true)
+    let sessionsDirectory = root.appendingPathComponent("sessions/2026/09/08", isDirectory: true)
+    let sessionID = "01a07eb0-9dd0-7e71-9834-d2817eca80e9"
+    let sessionURL = sessionsDirectory.appendingPathComponent(
+      "rollout-2026-09-08T09-45-00-\(sessionID).jsonl"
+    )
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    try FileManager.default.createDirectory(
+      at: activityDirectory,
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: sessionsDirectory,
+      withIntermediateDirectories: true
+    )
+
+    let startedAt = Date().addingTimeInterval(-20)
+    let completedAt = Date().addingTimeInterval(-1)
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let hookRecord = CodexActivityRecord(
+      schemaVersion: 2,
+      sessionID: sessionID,
+      turnID: "turn-1",
+      eventName: "UserPromptSubmit",
+      state: .running,
+      updatedAt: startedAt
+    )
+    try encoder.encode(hookRecord).write(
+      to: activityDirectory.appendingPathComponent("hook.json"),
+      options: .atomic
+    )
+
+    let formatter = ISO8601DateFormatter()
+    let started = #"{"timestamp":"\#(formatter.string(from: startedAt))","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#
+    let completed = #"{"timestamp":"\#(formatter.string(from: completedAt))","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"}}"#
+    try Data("\(started)\n\(completed)\n".utf8).write(to: sessionURL)
+
+    let monitor = CodexActivityMonitor(
+      directoryURL: activityDirectory,
+      sessionsDirectoryURL: root.appendingPathComponent("sessions", isDirectory: true)
+    )
+    monitor.refresh()
+
+    XCTAssertEqual(monitor.state, .finished)
+  }
+
+  @MainActor
+  func testOldRunningHookWithoutSessionLogFallsBackToIdle() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent("codex-orphaned-hook-\(UUID().uuidString)", isDirectory: true)
+    let activityDirectory = root.appendingPathComponent("activity", isDirectory: true)
+    let sessionsDirectory = root.appendingPathComponent("sessions", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    try FileManager.default.createDirectory(
+      at: activityDirectory,
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: sessionsDirectory,
+      withIntermediateDirectories: true
+    )
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let hookRecord = CodexActivityRecord(
+      schemaVersion: 2,
+      sessionID: UUID().uuidString.lowercased(),
+      turnID: "turn-1",
+      eventName: "UserPromptSubmit",
+      state: .running,
+      updatedAt: Date().addingTimeInterval(-61)
+    )
+    try encoder.encode(hookRecord).write(
+      to: activityDirectory.appendingPathComponent("hook.json"),
+      options: .atomic
+    )
+
+    let monitor = CodexActivityMonitor(
+      directoryURL: activityDirectory,
+      sessionsDirectoryURL: sessionsDirectory,
+      orphanedHookGraceInterval: 60
+    )
+    monitor.refresh()
+
+    XCTAssertEqual(monitor.state, .idle)
+  }
+
   func testHookInstallerPreservesExistingHooksAndCreatesBackup() throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent("codex-hook-installer-\(UUID().uuidString)", isDirectory: true)
