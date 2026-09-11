@@ -11,9 +11,11 @@ struct SettingsView: View {
 
   @State private var selectedPane: SettingsPane = .monitoring
   @State private var selectedLinxPane = 0
+  @State private var searchText = ""
 
   private let intervals = [10, 30, 60, 300, 600, 1_800]
   private let brandAccent = Color(red: 62 / 255, green: 207 / 255, blue: 181 / 255)
+  private var systemAccent: Color { Color(nsColor: .controlAccentColor) }
 
   init(
     model: AppModel,
@@ -26,24 +28,25 @@ struct SettingsView: View {
   }
 
   var body: some View {
-    HStack(spacing: 0) {
+    HStack(spacing: 20) {
       sidebar
-        .frame(width: 196)
-
-      Rectangle()
-        .fill(Color.primary.opacity(0.08))
-        .frame(width: 1)
+        .frame(width: 264)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
 
       ZStack {
         detailBackground
 
         VStack(spacing: 0) {
+          detailNavigationBar
           detailHeader
 
           detailBody
         }
       }
     }
+    .padding(.leading, 10)
+    .padding(.trailing, 14)
+    .padding(.vertical, 10)
     .frame(width: 890, height: 760)
     .background(Color(nsColor: .windowBackgroundColor))
   }
@@ -57,15 +60,13 @@ struct SettingsView: View {
     switch activePane {
     case .linx:
       linxPane
-        .padding(.horizontal, 24)
         .padding(.top, 8)
-        .padding(.bottom, 24)
+        .padding(.bottom, 14)
     case .monitoring, .general:
       ScrollView {
         detailContent
-          .padding(.horizontal, 24)
           .padding(.top, 8)
-          .padding(.bottom, 24)
+          .padding(.bottom, 14)
       }
       .scrollIndicators(.hidden)
     }
@@ -73,24 +74,70 @@ struct SettingsView: View {
 
   private var sidebar: some View {
     VStack(spacing: 0) {
+      sidebarSearch
+        .padding(.horizontal, 20)
+        .padding(.top, 64)
+        .padding(.bottom, 12)
+
       brandHeader
 
-      ZStack(alignment: .top) {
-        selectedSidebarGlass
-          .offset(y: CGFloat(selectedSidebarIndex) * (sidebarItemHeight + sidebarItemSpacing))
-
+      ScrollView {
         VStack(spacing: sidebarItemSpacing) {
-          ForEach(SettingsPane.allCases) { pane in
+          ForEach(filteredPanes) { pane in
             sidebarItem(pane)
           }
-        }
-      }
-      .padding(.horizontal, 10)
-      .padding(.top, 8)
 
-      Spacer(minLength: 16)
+          if filteredPanes.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+              .controlSize(.small)
+              .padding(.top, 20)
+          }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+      }
+      .scrollIndicators(.hidden)
     }
     .background(sidebarBackground)
+  }
+
+  private var sidebarSearch: some View {
+    HStack(spacing: 7) {
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(.secondary)
+
+      TextField("搜索", text: $searchText)
+        .textFieldStyle(.plain)
+        .font(.system(size: 13))
+
+      if !searchText.isEmpty {
+        Button {
+          searchText = ""
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .foregroundStyle(.tertiary)
+        }
+        .buttonStyle(.plain)
+      }
+    }
+    .padding(.horizontal, 10)
+    .frame(height: 30)
+    .background(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.055))
+    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 9, style: .continuous)
+        .stroke(Color.primary.opacity(0.07), lineWidth: 0.5)
+    }
+  }
+
+  private var filteredPanes: [SettingsPane] {
+    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !query.isEmpty else { return SettingsPane.allCases }
+    return SettingsPane.allCases.filter {
+      $0.title.localizedCaseInsensitiveContains(query)
+        || $0.subtitle.localizedCaseInsensitiveContains(query)
+    }
   }
 
   private var brandHeader: some View {
@@ -110,47 +157,27 @@ struct SettingsView: View {
           .foregroundStyle(.white)
       }
       .frame(width: 38, height: 38)
-      .shadow(color: brandAccent.opacity(0.24), radius: 8, y: 4)
+      .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(AppBrand.displayName)
           .font(.system(size: 14, weight: .semibold))
-        Text("AI Monitor")
+        Text("应用设置")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
 
       Spacer(minLength: 0)
     }
-    .padding(.horizontal, 16)
-    .padding(.top, 18)
-    .padding(.bottom, 14)
+    .padding(.horizontal, 22)
+    .padding(.vertical, 10)
   }
 
-  private let sidebarItemHeight: CGFloat = 42
-  private let sidebarItemSpacing: CGFloat = 6
-
-  private var selectedSidebarIndex: Int {
-    SettingsPane.allCases.firstIndex(of: selectedPane) ?? 0
-  }
+  private let sidebarItemHeight: CGFloat = 40
+  private let sidebarItemSpacing: CGFloat = 4
 
   private var sidebarSelectionAnimation: Animation? {
     reduceMotion ? nil : .easeInOut(duration: 0.2)
-  }
-
-  @ViewBuilder
-  private var selectedSidebarGlass: some View {
-    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-    Group {
-      if #available(macOS 26.0, *), !reduceTransparency {
-        Color.clear
-          .glassEffect(.regular.interactive(), in: shape)
-      } else {
-        shape.fill(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.08))
-      }
-    }
-    .frame(height: sidebarItemHeight)
-    .allowsHitTesting(false)
   }
 
   private func sidebarItem(_ pane: SettingsPane) -> some View {
@@ -165,17 +192,23 @@ struct SettingsView: View {
       HStack(spacing: 11) {
         Image(systemName: pane.symbol)
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(isSelected ? pane.tint : .secondary)
-          .frame(width: 26, height: 26)
+          .foregroundStyle(.white)
+          .frame(width: 25, height: 25)
+          .background(
+            isSelected ? Color.white.opacity(0.18) : pane.tint,
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+          )
+          .shadow(color: .black.opacity(isSelected ? 0 : 0.12), radius: 1.5, y: 1)
 
         Text(pane.title)
           .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-          .foregroundStyle(.primary)
+          .foregroundStyle(isSelected ? Color.white : Color.primary)
 
         Spacer(minLength: 0)
       }
       .padding(.horizontal, 10)
       .frame(height: sidebarItemHeight)
+      .background(isSelected ? systemAccent : Color.clear, in: shape)
       .contentShape(shape)
     }
     .buttonStyle(.plain)
@@ -203,26 +236,102 @@ struct SettingsView: View {
     .fixedSize(horizontal: true, vertical: false)
   }
 
-  private var detailHeader: some View {
-    HStack(alignment: .center, spacing: 16) {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(activePane.title)
-          .font(.system(size: 22, weight: .semibold, design: .rounded))
+  private var detailNavigationBar: some View {
+    HStack {
+      HStack(spacing: 0) {
+        Button {
+          selectAdjacentPane(offset: -1)
+        } label: {
+          Image(systemName: "chevron.left")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedSidebarIndex == 0)
 
-        Text(activePane.subtitle)
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        Divider()
+          .frame(height: 22)
+
+        Button {
+          selectAdjacentPane(offset: 1)
+        } label: {
+          Image(systemName: "chevron.right")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedSidebarIndex == SettingsPane.allCases.count - 1)
+      }
+      .font(.system(size: 16, weight: .medium))
+      .foregroundStyle(.secondary)
+      .frame(width: 92, height: 40)
+      .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+      .overlay {
+        Capsule()
+          .stroke(Color.primary.opacity(0.045), lineWidth: 1)
       }
 
       Spacer()
+    }
+    .frame(height: 42)
+  }
+
+  private var selectedSidebarIndex: Int {
+    SettingsPane.allCases.firstIndex(of: selectedPane) ?? 0
+  }
+
+  private func selectAdjacentPane(offset: Int) {
+    let target = selectedSidebarIndex + offset
+    guard SettingsPane.allCases.indices.contains(target) else { return }
+    withAnimation(sidebarSelectionAnimation) {
+      selectedPane = SettingsPane.allCases[target]
+    }
+  }
+
+  private var detailHeader: some View {
+    VStack(spacing: 9) {
+      ZStack {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: [activePane.tint.opacity(0.78), activePane.tint],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+
+        Image(systemName: activePane.symbol)
+          .font(.system(size: 28, weight: .medium))
+          .foregroundStyle(.white)
+      }
+      .frame(width: 58, height: 58)
+      .overlay {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .stroke(Color.white.opacity(0.35), lineWidth: 1)
+      }
+      .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
+
+      Text(activePane.title)
+        .font(.system(size: 25, weight: .bold))
+
+      Text(activePane.subtitle)
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
 
       if activePane == .linx {
         keyboardStatusBadge
       }
     }
-    .padding(.horizontal, 24)
+    .frame(maxWidth: .infinity)
+    .padding(.horizontal, 28)
+    .padding(.top, 10)
+    .padding(.bottom, 18)
+    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+    }
     .padding(.top, 18)
-    .padding(.bottom, 14)
+    .padding(.bottom, 8)
   }
 
   @ViewBuilder
@@ -922,44 +1031,28 @@ struct SettingsView: View {
   }
 
   private var detailBackground: some View {
-    ZStack {
-      Color(nsColor: .windowBackgroundColor)
-
-      RadialGradient(
-        colors: [brandAccent.opacity(0.12), .clear],
-        center: .topTrailing,
-        startRadius: 0,
-        endRadius: 420
-      )
-
-      RadialGradient(
-        colors: [Color.blue.opacity(0.08), .clear],
-        center: .bottomLeading,
-        startRadius: 0,
-        endRadius: 460
-      )
-    }
-    .ignoresSafeArea()
+    Color(nsColor: .windowBackgroundColor)
+      .ignoresSafeArea()
   }
 
   private var sidebarBackground: some View {
     ZStack {
       if reduceTransparency {
-        Color(nsColor: .windowBackgroundColor)
-      } else if #available(macOS 26.0, *) {
-        // NSVisualEffectView in the sidebar blocks Liquid Glass sampling.
-        Color.primary.opacity(colorScheme == .dark ? 0.07 : 0.035)
+        Color(nsColor: .controlBackgroundColor)
       } else {
         AppFrostedBackdrop(material: .sidebar, blendingMode: .behindWindow)
       }
 
       LinearGradient(
-        colors: [brandAccent.opacity(0.08), Color.blue.opacity(0.03), .clear],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
+        colors: [Color.white.opacity(colorScheme == .dark ? 0.01 : 0.16), .clear],
+        startPoint: .top,
+        endPoint: .bottom
       )
     }
-    .ignoresSafeArea()
+  }
+
+  private var systemGroupBackground: Color {
+    colorScheme == .dark ? Color.white.opacity(0.065) : Color.black.opacity(0.035)
   }
 
   private func settingsCard<Content: View>(
@@ -970,38 +1063,43 @@ struct SettingsView: View {
     showPushAction: Bool = false,
     @ViewBuilder content: () -> Content
   ) -> some View {
-    glassSurface(tint: tint) {
-      VStack(alignment: .leading, spacing: 13) {
-        HStack(spacing: 10) {
-          Image(systemName: symbol)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(width: 30, height: 30)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+    VStack(alignment: .leading, spacing: 13) {
+      HStack(spacing: 10) {
+        Image(systemName: symbol)
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(tint)
+          .frame(width: 30, height: 30)
+          .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
 
-          VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-              .font(.headline)
-            Text(subtitle)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-
-          Spacer(minLength: 0)
-          if showPushAction {
-            prominentGlassButton {
-              model.pushNow()
-            } label: {
-              Label(model.isSyncing ? "正在推送" : "立即推送", systemImage: "paperplane.fill")
-            }
-            .disabled(model.isSyncing)
-          }
+        VStack(alignment: .leading, spacing: 1) {
+          Text(title)
+            .font(.headline)
+          Text(subtitle)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
 
-        content()
+        Spacer(minLength: 0)
+        if showPushAction {
+          prominentGlassButton {
+            model.pushNow()
+          } label: {
+            Label(model.isSyncing ? "正在推送" : "立即推送", systemImage: "paperplane.fill")
+          }
+          .disabled(model.isSyncing)
+        }
       }
-      .padding(17)
-      .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+      Divider()
+        .opacity(0.55)
+
+      content()
+    }
+    .padding(16)
+    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .stroke(Color.primary.opacity(0.045), lineWidth: 1)
     }
   }
 
