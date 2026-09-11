@@ -13,10 +13,18 @@ settings:
     ENABLE_APP_SANDBOX: NO
     ENABLE_HARDENED_RUNTIME: YES
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.2
+
 targets:
   CodexLinxDisplay:
     type: application
     platform: macOS
+    configFiles:
+      Debug: Config/Version.xcconfig
+      Release: Config/Version.xcconfig
     sources:
       - path: Sources/Shared
       - path: Sources/App
@@ -34,13 +42,17 @@ targets:
           - zh_CN
           - en
         CFBundleName: AI Monitor
-        CFBundleShortVersionString: "0.2.0"
-        CFBundleVersion: "3"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSUIElement: true
         NSHighResolutionCapable: true
         NSLocalNetworkUsageDescription: 用于将用量卡片发送到局域网内的键盘屏幕。首次运行请在系统提示中允许“本地网络”。
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        SUEnableAutomaticChecks: true
+        SUFeedURL: https://github.com/Mean325/AI-Monitor/releases/latest/download/appcast.xml
+        SUScheduledCheckInterval: 86400
+        SUPublicEDKey: "$(SPARKLE_PUBLIC_KEY)"
     settings:
       base:
         CODE_SIGNING_ALLOWED: YES
@@ -49,6 +61,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.olivia.CodexLinxDisplay
         PRODUCT_NAME: AI Monitor
         PRODUCT_MODULE_NAME: CodexLinxDisplay
+    dependencies:
+      - package: Sparkle
   CodexLinxPreview:
     type: tool
     platform: macOS

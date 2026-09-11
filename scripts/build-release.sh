@@ -13,7 +13,8 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 cd "$ROOT_DIR"
 xcodegen generate
 
-VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+VERSION_INFO="$(./scripts/version.sh current)"
+VERSION="${VERSION_INFO%% *}"
 ARCHIVE_NAME="CodexLinxDisplay-v$VERSION"
 
 rm -rf "$BUILD_DIR" "$STAGING_DIR"

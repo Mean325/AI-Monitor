@@ -5,10 +5,12 @@ import SwiftUI
 @MainActor
 struct CodexLinxDisplayApp: App {
   @StateObject private var model: AppModel
+  private let updater: UpdaterController
 
   init() {
     let hookInstaller = CodexHookInstaller()
     let claudeHookInstaller = ClaudeCodeHookInstaller()
+    updater = UpdaterController()
     if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
       if hookInstaller.installationState() != .configured {
         try? hookInstaller.install()
@@ -28,7 +30,10 @@ struct CodexLinxDisplayApp: App {
 
   var body: some Scene {
     MenuBarExtra {
-      MenuBarContentView(model: model)
+      MenuBarContentView(
+        model: model,
+        checkForUpdates: updater.checkForUpdates
+      )
     } label: {
       MenuBarStatusLabel(
         title: menuBarTitle,
@@ -43,7 +48,10 @@ struct CodexLinxDisplayApp: App {
     .menuBarExtraStyle(.window)
 
     Settings {
-      SettingsView(model: model)
+      SettingsView(
+        model: model,
+        checkForUpdates: updater.checkForUpdates
+      )
         .task { model.start() }
     }
     .windowResizability(.contentSize)

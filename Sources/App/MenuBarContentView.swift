@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct MenuBarContentView: View {
   @ObservedObject var model: AppModel
+  var checkForUpdates: () -> Void = {}
   @Environment(\.openSettings) private var openSettings
 
   var body: some View {
@@ -74,6 +75,10 @@ struct MenuBarContentView: View {
           SettingsWindowPresenter.show(using: openSettings)
         } label: {
           Label("设置", systemImage: "gearshape")
+        }
+
+        Button(action: checkForUpdates) {
+          Label("检查更新", systemImage: "arrow.down.circle")
         }
 
         Spacer()

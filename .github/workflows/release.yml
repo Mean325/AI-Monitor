@@ -10,13 +10,13 @@ permissions:
 
 jobs:
   release:
-    if: ${{ vars.ENABLE_SIGNED_RELEASES == 'true' }}
     runs-on: macos-15
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
       - name: 检查发布密钥
+        if: ${{ vars.ENABLE_SIGNED_RELEASES == 'true' }}
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -36,7 +36,11 @@ jobs:
       - name: 安装 XcodeGen
         run: brew install xcodegen
 
+      - name: 校验发布版本
+        run: ./scripts/version.sh verify-tag "$GITHUB_REF_NAME"
+
       - name: 导入 Developer ID 证书
+        if: ${{ vars.ENABLE_SIGNED_RELEASES == 'true' }}
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -54,6 +58,7 @@ jobs:
           security default-keychain -d user -s "$KEYCHAIN_PATH"
 
       - name: 配置 Apple 公证
+        if: ${{ vars.ENABLE_SIGNED_RELEASES == 'true' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -65,11 +70,21 @@ jobs:
             --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
       - name: 构建、签名并公证
+        if: ${{ vars.ENABLE_SIGNED_RELEASES == 'true' }}
         env:
           CODE_SIGN_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION }}
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
           NOTARY_PROFILE: codex-linx-notary
         run: ./scripts/build-release.sh
+
+      - name: 构建预览发布包
+        if: ${{ vars.ENABLE_SIGNED_RELEASES != 'true' }}
+        run: ./scripts/build-release.sh
+
+      - name: 生成 Sparkle 更新清单
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: ./scripts/generate-appcast.sh "$PWD/dist" "$GITHUB_REF_NAME"
 
       - name: 创建 GitHub Release
         env:
@@ -78,5 +93,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             dist/CodexLinxDisplay-*.dmg \
             dist/CodexLinxDisplay-*.zip \
+            dist/appcast.xml \
             --title "AI Monitor $GITHUB_REF_NAME" \
             --generate-notes

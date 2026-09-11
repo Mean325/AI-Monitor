@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- 统一应用版本与构建号配置，增加版本递增、发布标签校验及免安装开发启动脚本。
+- 恢复应用内更新：通过 Sparkle 检查 GitHub Releases，发布流水线自动签名更新包并生成 appcast。
 - 修复 Codex 任务结束后残留的运行记录仍使任务灯显示黄色的问题。
 - 修复 Grok 任务灯：仅在 CLI 正在执行 turn/工具时显示黄灯，打开 Grok CLI 但空闲时为绿灯。
 - 修复 Grok 套餐名：接口中的 GrokPro 展示为 SuperGrok。

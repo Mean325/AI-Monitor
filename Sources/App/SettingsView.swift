@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
   @ObservedObject var model: AppModel
+  var checkForUpdates: () -> Void = {}
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,8 +15,13 @@ struct SettingsView: View {
   private let intervals = [10, 30, 60, 300, 600, 1_800]
   private let brandAccent = Color(red: 62 / 255, green: 207 / 255, blue: 181 / 255)
 
-  init(model: AppModel, initialPane: SettingsPane = .monitoring) {
+  init(
+    model: AppModel,
+    initialPane: SettingsPane = .monitoring,
+    checkForUpdates: @escaping () -> Void = {}
+  ) {
     self.model = model
+    self.checkForUpdates = checkForUpdates
     _selectedPane = State(initialValue: initialPane)
   }
 
@@ -861,6 +867,20 @@ struct SettingsView: View {
       }
 
       settingsCard(
+        title: "版本更新",
+        subtitle: "通过 GitHub Releases 获取并安装新版本",
+        symbol: "arrow.triangle.2.circlepath",
+        tint: .blue
+      ) {
+        settingRow(
+          title: AppBrand.versionDescription,
+          subtitle: "发布版每天自动检查一次，也可以立即检查"
+        ) {
+          Button("检查更新", action: checkForUpdates)
+        }
+      }
+
+      settingsCard(
         title: "关于",
         subtitle: "AI Monitor · AI 任务监控与 Linx68 推送",
         symbol: "info.circle",
@@ -885,6 +905,9 @@ struct SettingsView: View {
           VStack(alignment: .leading, spacing: 4) {
             Text(AppBrand.displayName)
               .font(.headline)
+            Text(AppBrand.versionDescription)
+              .font(.caption.monospacedDigit())
+              .foregroundStyle(.secondary)
             Text("监控 AI 任务状态，并将用量或自定义图片推送到 Linx68。")
               .font(.caption)
               .foregroundStyle(.secondary)
