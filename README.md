@@ -19,19 +19,19 @@
 
 ```bash
 ./scripts/version.sh current       # 查看版本和构建号
-./scripts/version.sh bump patch    # 0.4.0 -> 0.4.1，同时递增构建号
-./scripts/version.sh bump minor    # 0.4.0 -> 0.5.0，同时递增构建号
+./scripts/version.sh bump patch    # 0.4.1 -> 0.4.2，同时递增构建号
+./scripts/version.sh bump minor    # 0.4.1 -> 0.5.0，同时递增构建号
 ./scripts/version.sh set 1.0.0 10  # 明确设置版本与构建号
 ```
 
 推送 `v*` 标签时，发布工作流会先确认标签与应用版本一致，再生成安装包。例如：
 
 ```bash
-./scripts/version.sh set 0.4.1
+./scripts/version.sh set 0.4.2
 git add Config/Version.xcconfig
-git commit -m "chore: release 0.4.1"
-git tag v0.4.1
-git push origin main v0.4.1
+git commit -m "chore: release 0.4.2"
+git tag v0.4.2
+git push origin main v0.4.2
 ```
 
 标签推送后，GitHub Actions 会构建 ZIP/DMG、使用 Sparkle 私钥签名 ZIP、生成
@@ -45,7 +45,7 @@ git push origin main v0.4.1
 ID 与 Apple 公证 Secrets 后，流水线会额外执行签名与公证；未配置时仍会发布 adhoc
 预览包。
 
-> 注意：不包含更新模块的旧安装包无法自行获得该能力，需要安装一次 0.4.0 或更高
+> 注意：不包含更新模块的旧安装包无法自行获得该能力，需要安装一次 0.4.1 或更高
 > 版本作为更新基线。此后无需再次手动下载安装包。
 
 ## 鸣谢
