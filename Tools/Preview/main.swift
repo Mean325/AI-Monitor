@@ -9,7 +9,7 @@ let useGrok = arguments.contains("--grok")
 let design = arguments
   .first(where: { $0.hasPrefix("--design=") })
   .flatMap { UsageCardDesign(rawValue: String($0.dropFirst("--design=".count))) }
-  ?? .classic
+  ?? .minimalColumn
 let colorScheme = arguments
   .first(where: { $0.hasPrefix("--color=") })
   .flatMap { UsageCardColorScheme(rawValue: String($0.dropFirst("--color=".count))) }

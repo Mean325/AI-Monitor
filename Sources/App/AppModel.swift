@@ -269,9 +269,16 @@ final class AppModel: ObservableObject {
         ?? defaults.string(forKey: Keys.legacyUsageCardStyle)
         ?? ""
     ) ?? .deepSpace
-    usageCardDesign = UsageCardDesign(
+    let storedDesign = UsageCardDesign(
       rawValue: defaults.string(forKey: Keys.usageCardDesign) ?? ""
-    ) ?? .classic
+    )
+    usageCardDesign =
+      storedDesign == .classic
+      ? .minimalColumn
+      : (storedDesign ?? .minimalColumn)
+    if storedDesign == .classic {
+      defaults.set(UsageCardDesign.minimalColumn.rawValue, forKey: Keys.usageCardDesign)
+    }
 
     let storedSafeArea = defaults.object(forKey: Keys.safeAreaHeight) as? Double
     safeAreaHeight = storedSafeArea ?? Double(UsageCardLayout.defaultSafeArea)

@@ -293,7 +293,25 @@ final class AppModelTests: XCTestCase {
     let model = AppModel(defaults: defaults)
 
     XCTAssertEqual(model.usageCardColorScheme, .signalYellow)
-    XCTAssertEqual(model.usageCardDesign, .classic)
+    XCTAssertEqual(model.usageCardDesign, .minimalColumn)
+  }
+
+  @MainActor
+  func testClassicDesignPreferenceMigratesToMinimalColumn() throws {
+    let suiteName = "AppModelTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    defaults.set(UsageCardDesign.classic.rawValue, forKey: "usageCardDesign")
+    let model = AppModel(defaults: defaults)
+
+    XCTAssertEqual(model.usageCardDesign, .minimalColumn)
+    XCTAssertEqual(
+      defaults.string(forKey: "usageCardDesign"),
+      UsageCardDesign.minimalColumn.rawValue
+    )
+    XCTAssertFalse(UsageCardDesign.selectableCases.contains(.classic))
   }
 
   @MainActor

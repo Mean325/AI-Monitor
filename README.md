@@ -29,7 +29,9 @@
 应用会根据当前数据生成适配 Linx68 竖屏的卡片，显示任务状态、剩余用量、可用重置次数和重置时间。
 
 <p align="center">
-  <img src="docs/images/keyboard-card.jpg" width="180" alt="Linx68 键盘用量卡片">
+  <img src="docs/images/keyboard-card-minimal-column.png" width="180" alt="简约立柱风格的 Linx68 键盘画面">
+  &nbsp;&nbsp;
+  <img src="docs/images/keyboard-device.jpg" width="420" alt="Linx68 键盘上的简约立柱用量画面">
 </p>
 
 ## 支持的数据源

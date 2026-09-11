@@ -423,7 +423,7 @@ struct SettingsView: View {
                 ],
                 spacing: 10
               ) {
-                ForEach(UsageCardDesign.allCases) { design in
+                ForEach(UsageCardDesign.selectableCases) { design in
                   usageDesignOption(design)
                 }
               }

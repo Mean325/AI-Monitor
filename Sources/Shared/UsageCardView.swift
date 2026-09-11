@@ -574,6 +574,10 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
 
   var id: String { rawValue }
 
+  static var selectableCases: [UsageCardDesign] {
+    allCases.filter { $0 != .classic }
+  }
+
   var title: String {
     switch self {
     case .classic: return "经典卡片"

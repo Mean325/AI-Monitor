@@ -90,7 +90,7 @@ enum UsageCardRenderer {
     safeAreaHeight: CGFloat,
     jpegQuality: Double,
     colorScheme: UsageCardColorScheme = .deepSpace,
-    design: UsageCardDesign = .classic
+    design: UsageCardDesign = .minimalColumn
   ) throws -> RenderedUsageCard {
     let view = UsageCardView(
       snapshot: snapshot,
@@ -132,7 +132,7 @@ enum UsageCardRenderer {
     safeAreaHeight: CGFloat,
     jpegQuality: Double,
     colorScheme: UsageCardColorScheme = .deepSpace,
-    design: UsageCardDesign = .classic
+    design: UsageCardDesign = .minimalColumn
   ) throws -> RenderedUsageCard {
     let view = ClaudeCodeCardView(
       snapshot: claudeSnapshot,
@@ -175,7 +175,7 @@ enum UsageCardRenderer {
     safeAreaHeight: CGFloat,
     jpegQuality: Double,
     colorScheme: UsageCardColorScheme = .deepSpace,
-    design: UsageCardDesign = .classic
+    design: UsageCardDesign = .minimalColumn
   ) throws -> RenderedUsageCard {
     let view = QoderCardView(
       snapshot: qoderSnapshot,
@@ -218,7 +218,7 @@ enum UsageCardRenderer {
     safeAreaHeight: CGFloat,
     jpegQuality: Double,
     colorScheme: UsageCardColorScheme = .deepSpace,
-    design: UsageCardDesign = .classic
+    design: UsageCardDesign = .minimalColumn
   ) throws -> RenderedUsageCard {
     let view = GrokCardView(
       snapshot: grokSnapshot,

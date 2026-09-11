@@ -1,7 +1,7 @@
 // Single source of truth for the app version.
 // Update it with: ./scripts/version.sh set 0.3.0
-MARKETING_VERSION = 0.5.1
-CURRENT_PROJECT_VERSION = 10
+MARKETING_VERSION = 0.5.2
+CURRENT_PROJECT_VERSION = 11
 
 // Public half of the update-signing key. The private half stays in Keychain
 // and in the repository's SPARKLE_PRIVATE_KEY Actions secret.
