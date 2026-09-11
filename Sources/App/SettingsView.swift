@@ -2,6 +2,10 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum SettingsChrome {
+  static let cornerRadius: CGFloat = 14
+}
+
 struct SettingsView: View {
   @ObservedObject var model: AppModel
   var checkForUpdates: () -> Void = {}
@@ -11,7 +15,7 @@ struct SettingsView: View {
 
   @State private var selectedPane: SettingsPane = .monitoring
   @State private var selectedLinxPane = 0
-  @State private var searchText = ""
+  @State private var hoveringWindowControls = false
 
   private let intervals = [10, 30, 60, 300, 600, 1_800]
   private let brandAccent = Color(red: 62 / 255, green: 207 / 255, blue: 181 / 255)
@@ -28,27 +32,35 @@ struct SettingsView: View {
   }
 
   var body: some View {
-    HStack(spacing: 20) {
+    HStack(spacing: 14) {
       sidebar
-        .frame(width: 264)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .frame(width: 230)
+        .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.cornerRadius, style: .continuous))
+        .overlay {
+          RoundedRectangle(cornerRadius: SettingsChrome.cornerRadius, style: .continuous)
+            .stroke(sidebarBorderColor, lineWidth: 0.75)
+        }
 
       ZStack {
         detailBackground
 
         VStack(spacing: 0) {
-          detailNavigationBar
-          detailHeader
-
           detailBody
         }
       }
     }
-    .padding(.leading, 10)
-    .padding(.trailing, 14)
-    .padding(.vertical, 10)
-    .frame(width: 890, height: 760)
-    .background(Color(nsColor: .windowBackgroundColor))
+    .padding(6)
+    .frame(
+      minWidth: 760,
+      idealWidth: 820,
+      maxWidth: .infinity,
+      minHeight: 600,
+      idealHeight: 680,
+      maxHeight: .infinity
+    )
+    .background(detailCanvasBackground)
+    .background(SettingsWindowConfigurator())
+    .ignoresSafeArea(.container, edges: .top)
   }
 
   private var activePane: SettingsPane {
@@ -57,43 +69,31 @@ struct SettingsView: View {
 
   @ViewBuilder
   private var detailBody: some View {
-    switch activePane {
-    case .linx:
-      linxPane
-        .padding(.top, 8)
-        .padding(.bottom, 14)
-    case .monitoring, .general:
-      ScrollView {
+    ScrollView {
+      VStack(spacing: 0) {
+        detailHeader
+
         detailContent
           .padding(.top, 8)
           .padding(.bottom, 14)
       }
-      .scrollIndicators(.hidden)
     }
+    .scrollIndicators(.automatic)
   }
 
   private var sidebar: some View {
     VStack(spacing: 0) {
-      sidebarSearch
-        .padding(.horizontal, 20)
-        .padding(.top, 64)
-        .padding(.bottom, 12)
+      windowControls
 
       brandHeader
 
       ScrollView {
         VStack(spacing: sidebarItemSpacing) {
-          ForEach(filteredPanes) { pane in
+          ForEach(SettingsPane.allCases) { pane in
             sidebarItem(pane)
           }
-
-          if filteredPanes.isEmpty {
-            ContentUnavailableView.search(text: searchText)
-              .controlSize(.small)
-              .padding(.top, 20)
-          }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
       }
       .scrollIndicators(.hidden)
@@ -101,43 +101,49 @@ struct SettingsView: View {
     .background(sidebarBackground)
   }
 
-  private var sidebarSearch: some View {
-    HStack(spacing: 7) {
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: 13, weight: .medium))
-        .foregroundStyle(.secondary)
-
-      TextField("搜索", text: $searchText)
-        .textFieldStyle(.plain)
-        .font(.system(size: 13))
-
-      if !searchText.isEmpty {
-        Button {
-          searchText = ""
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .foregroundStyle(.tertiary)
-        }
-        .buttonStyle(.plain)
+  private var windowControls: some View {
+    HStack(spacing: 8) {
+      windowControlButton(color: Color(red: 1.0, green: 0.37, blue: 0.34), symbol: "xmark") {
+        NSApp.keyWindow?.performClose(nil)
       }
+
+      windowControlButton(color: Color(red: 1.0, green: 0.74, blue: 0.05), symbol: "minus") {
+        NSApp.keyWindow?.miniaturize(nil)
+      }
+
+      windowControlButton(color: Color(red: 0.16, green: 0.78, blue: 0.35), symbol: "arrow.up.left.and.arrow.down.right") {
+        NSApp.keyWindow?.zoom(nil)
+      }
+
+      Spacer(minLength: 0)
     }
-    .padding(.horizontal, 10)
-    .frame(height: 30)
-    .background(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.055))
-    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 9, style: .continuous)
-        .stroke(Color.primary.opacity(0.07), lineWidth: 0.5)
-    }
+    .padding(.horizontal, 20)
+    .padding(.top, 15)
+    .frame(height: 38, alignment: .top)
+    .onHover { hoveringWindowControls = $0 }
   }
 
-  private var filteredPanes: [SettingsPane] {
-    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !query.isEmpty else { return SettingsPane.allCases }
-    return SettingsPane.allCases.filter {
-      $0.title.localizedCaseInsensitiveContains(query)
-        || $0.subtitle.localizedCaseInsensitiveContains(query)
+  private func windowControlButton(
+    color: Color,
+    symbol: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Circle()
+        .fill(color)
+        .frame(width: 13, height: 13)
+        .overlay {
+          Image(systemName: symbol)
+            .font(.system(size: 6, weight: .black))
+            .foregroundStyle(Color.black.opacity(0.58))
+            .opacity(hoveringWindowControls ? 1 : 0)
+        }
+        .overlay {
+          Circle()
+            .stroke(Color.black.opacity(0.16), lineWidth: 0.5)
+        }
     }
+    .buttonStyle(.plain)
   }
 
   private var brandHeader: some View {
@@ -169,7 +175,7 @@ struct SettingsView: View {
 
       Spacer(minLength: 0)
     }
-    .padding(.horizontal, 22)
+    .padding(.horizontal, 18)
     .padding(.vertical, 10)
   }
 
@@ -236,89 +242,37 @@ struct SettingsView: View {
     .fixedSize(horizontal: true, vertical: false)
   }
 
-  private var detailNavigationBar: some View {
-    HStack {
-      HStack(spacing: 0) {
-        Button {
-          selectAdjacentPane(offset: -1)
-        } label: {
-          Image(systemName: "chevron.left")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .buttonStyle(.plain)
-        .disabled(selectedSidebarIndex == 0)
-
-        Divider()
-          .frame(height: 22)
-
-        Button {
-          selectAdjacentPane(offset: 1)
-        } label: {
-          Image(systemName: "chevron.right")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .buttonStyle(.plain)
-        .disabled(selectedSidebarIndex == SettingsPane.allCases.count - 1)
-      }
-      .font(.system(size: 16, weight: .medium))
-      .foregroundStyle(.secondary)
-      .frame(width: 92, height: 40)
-      .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
-      .overlay {
-        Capsule()
-          .stroke(Color.primary.opacity(0.045), lineWidth: 1)
-      }
-
-      Spacer()
-    }
-    .frame(height: 42)
-  }
-
-  private var selectedSidebarIndex: Int {
-    SettingsPane.allCases.firstIndex(of: selectedPane) ?? 0
-  }
-
-  private func selectAdjacentPane(offset: Int) {
-    let target = selectedSidebarIndex + offset
-    guard SettingsPane.allCases.indices.contains(target) else { return }
-    withAnimation(sidebarSelectionAnimation) {
-      selectedPane = SettingsPane.allCases[target]
-    }
-  }
-
   private var detailHeader: some View {
-    VStack(spacing: 9) {
-      ZStack {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(
-            LinearGradient(
-              colors: [activePane.tint.opacity(0.78), activePane.tint],
-              startPoint: .topLeading,
-              endPoint: .bottomTrailing
-            )
-          )
+    ZStack(alignment: .topTrailing) {
+      VStack(spacing: 9) {
+        ZStack {
+          RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(detailIconBackground)
 
-        Image(systemName: activePane.symbol)
-          .font(.system(size: 28, weight: .medium))
-          .foregroundStyle(.white)
+          Image(systemName: activePane.symbol)
+            .font(.system(size: 28, weight: .medium))
+            .foregroundStyle(detailIconForeground)
+        }
+        .frame(width: 58, height: 58)
+        .overlay {
+          RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .stroke(detailIconBorderColor, lineWidth: 0.75)
+        }
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.14), radius: 3, y: 1)
+
+        Text(activePane.title)
+          .font(.system(size: 25, weight: .bold))
+
+        Text(activePane.subtitle)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
       }
-      .frame(width: 58, height: 58)
-      .overlay {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(Color.white.opacity(0.35), lineWidth: 1)
-      }
-      .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
-
-      Text(activePane.title)
-        .font(.system(size: 25, weight: .bold))
-
-      Text(activePane.subtitle)
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
+      .frame(maxWidth: .infinity)
 
       if activePane == .linx {
         keyboardStatusBadge
+          .padding(.top, 2)
       }
     }
     .frame(maxWidth: .infinity)
@@ -330,7 +284,7 @@ struct SettingsView: View {
       RoundedRectangle(cornerRadius: 18, style: .continuous)
         .stroke(Color.primary.opacity(0.045), lineWidth: 1)
     }
-    .padding(.top, 18)
+    .padding(.top, 0)
     .padding(.bottom, 8)
   }
 
@@ -357,21 +311,14 @@ struct SettingsView: View {
       if selectedLinxPane == 0 {
         displayPane
       } else {
-        ScrollView {
-          connectionPane
-            .background(.clear)
-            .background(OverlayScrollChromeInstaller())
-        }
-          .scrollIndicators(.automatic)
-          .overlayScrollChrome()
+        connectionPane
       }
     }
   }
 
   private var displayPane: some View {
     HStack(alignment: .top, spacing: 16) {
-      ScrollView {
-        VStack(spacing: 16) {
+      VStack(spacing: 16) {
           settingsCard(
           title: "显示内容",
           subtitle: "选择键盘屏幕上展示的信息",
@@ -525,7 +472,7 @@ struct SettingsView: View {
               }
 
               Slider(value: $model.jpegQuality, in: 0.5...1, step: 0.05)
-                .tint(brandAccent)
+                .tint(systemAccent)
             }
           }
         }
@@ -541,17 +488,11 @@ struct SettingsView: View {
             }
             .padding(12)
           }
-        }
-        .frame(maxWidth: .infinity)
-        .background(.clear)
-        .background(OverlayScrollChromeInstaller())
       }
-      .scrollIndicators(.automatic)
-      .overlayScrollChrome()
       .frame(maxWidth: .infinity)
 
       previewCard
-        .frame(width: 204)
+        .frame(width: 188)
     }
     .frame(maxHeight: .infinity, alignment: .top)
   }
@@ -710,7 +651,7 @@ struct SettingsView: View {
         }
         Toggle("状态栏展示任务监控", isOn: $model.showTaskStatusInMenuBar)
           .toggleStyle(.switch)
-          .tint(brandAccent)
+          .tint(systemAccent)
           .padding(.vertical, 6)
         if model.showTaskStatusInMenuBar {
           Text("原图标位置")
@@ -971,7 +912,7 @@ struct SettingsView: View {
           )
           .labelsHidden()
           .toggleStyle(.switch)
-          .tint(brandAccent)
+          .tint(systemAccent)
         }
       }
 
@@ -1031,28 +972,58 @@ struct SettingsView: View {
   }
 
   private var detailBackground: some View {
-    Color(nsColor: .windowBackgroundColor)
+    detailCanvasBackground
       .ignoresSafeArea()
   }
 
   private var sidebarBackground: some View {
     ZStack {
       if reduceTransparency {
-        Color(nsColor: .controlBackgroundColor)
+        sidebarOpaqueBackground
       } else {
         AppFrostedBackdrop(material: .sidebar, blendingMode: .behindWindow)
       }
 
-      LinearGradient(
-        colors: [Color.white.opacity(colorScheme == .dark ? 0.01 : 0.16), .clear],
-        startPoint: .top,
-        endPoint: .bottom
-      )
+      sidebarMaterialWash
     }
   }
 
+  private var detailCanvasBackground: Color {
+    Color(nsColor: .windowBackgroundColor)
+  }
+
+  private var sidebarOpaqueBackground: Color {
+    colorScheme == .dark
+      ? Color(nsColor: .underPageBackgroundColor)
+      : Color(nsColor: .windowBackgroundColor)
+  }
+
+  private var sidebarMaterialWash: Color {
+    colorScheme == .dark
+      ? Color.black.opacity(0.10)
+      : Color.white.opacity(0.68)
+  }
+
+  private var sidebarBorderColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.09) : Color.white.opacity(0.72)
+  }
+
+  private var detailIconBackground: Color {
+    colorScheme == .dark
+      ? Color(nsColor: .quaternaryLabelColor)
+      : Color(nsColor: .tertiaryLabelColor)
+  }
+
+  private var detailIconForeground: Color {
+    colorScheme == .dark ? Color.white.opacity(0.92) : .white
+  }
+
+  private var detailIconBorderColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.10)
+  }
+
   private var systemGroupBackground: Color {
-    colorScheme == .dark ? Color.white.opacity(0.065) : Color.black.opacity(0.035)
+    colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.032)
   }
 
   private func settingsCard<Content: View>(
@@ -1067,9 +1038,14 @@ struct SettingsView: View {
       HStack(spacing: 10) {
         Image(systemName: symbol)
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(tint)
+          .foregroundStyle(cardIconForeground)
           .frame(width: 30, height: 30)
-          .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+          .background(cardIconBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+          .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .stroke(cardIconBorderColor, lineWidth: 0.5)
+          }
+          .shadow(color: .black.opacity(colorScheme == .dark ? 0.24 : 0.12), radius: 1.5, y: 1)
 
         VStack(alignment: .leading, spacing: 1) {
           Text(title)
@@ -1099,8 +1075,26 @@ struct SettingsView: View {
     .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     .overlay {
       RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+        .stroke(cardBorderColor, lineWidth: 0.75)
     }
+  }
+
+  private var cardIconBackground: Color {
+    colorScheme == .dark
+      ? Color(nsColor: .quaternaryLabelColor)
+      : Color(nsColor: .tertiaryLabelColor)
+  }
+
+  private var cardIconForeground: Color {
+    colorScheme == .dark ? Color.white.opacity(0.9) : .white
+  }
+
+  private var cardIconBorderColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09)
+  }
+
+  private var cardBorderColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.055)
   }
 
   private func displayModeOption(_ mode: DisplayMode, title: String? = nil) -> some View {
@@ -1113,10 +1107,10 @@ struct SettingsView: View {
       HStack(spacing: 8) {
         Image(systemName: mode.symbol)
           .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(isSelected ? brandAccent : .secondary)
+          .foregroundStyle(isSelected ? systemAccent : .secondary)
           .frame(width: 26, height: 26)
           .background(
-            (isSelected ? brandAccent : Color.primary).opacity(isSelected ? 0.12 : 0.05),
+            (isSelected ? systemAccent : Color.primary).opacity(isSelected ? 0.12 : 0.05),
             in: RoundedRectangle(cornerRadius: 8)
           )
 
@@ -1130,10 +1124,10 @@ struct SettingsView: View {
       .padding(.horizontal, 9)
       .padding(.vertical, 8)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? brandAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
+      .background(isSelected ? systemAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
       .overlay {
         shape.stroke(
-          isSelected ? brandAccent.opacity(0.55) : Color.primary.opacity(0.07),
+          isSelected ? systemAccent.opacity(0.55) : Color.primary.opacity(0.07),
           lineWidth: isSelected ? 1.25 : 1
         )
       }
@@ -1165,7 +1159,7 @@ struct SettingsView: View {
       icon: AnyView(
         Image(systemName: symbol)
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(tint)
+          .foregroundStyle(systemAccent)
           .frame(width: 30, height: 30)
           .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
       ),
@@ -1190,14 +1184,14 @@ struct SettingsView: View {
         Spacer(minLength: 0)
         Image(systemName: "checkmark.circle.fill")
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(tint)
+          .foregroundStyle(systemAccent)
           .opacity(isSelected ? 1 : 0)
       }
       .padding(9)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? tint.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
+      .background(isSelected ? systemAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
       .overlay {
-        shape.stroke(isSelected ? tint.opacity(0.55) : Color.primary.opacity(0.07),
+        shape.stroke(isSelected ? systemAccent.opacity(0.55) : Color.primary.opacity(0.07),
           lineWidth: isSelected ? 1.25 : 1)
       }
       .contentShape(shape)
@@ -1314,15 +1308,15 @@ struct SettingsView: View {
 
         Image(systemName: "checkmark.circle.fill")
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(tint)
+          .foregroundStyle(systemAccent)
           .opacity(isSelected ? 1 : 0)
       }
       .padding(9)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? tint.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
+      .background(isSelected ? systemAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
       .overlay {
         shape.stroke(
-          isSelected ? tint.opacity(0.55) : Color.primary.opacity(0.07),
+          isSelected ? systemAccent.opacity(0.55) : Color.primary.opacity(0.07),
           lineWidth: isSelected ? 1.25 : 1
         )
       }
@@ -1597,6 +1591,69 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     case .monitoring: return .green
     case .linx: return .blue
     case .general: return .gray
+    }
+  }
+}
+
+private struct SettingsWindowConfigurator: NSViewRepresentable {
+  final class Coordinator {
+    var configuredWindows = Set<ObjectIdentifier>()
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator()
+  }
+
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView(frame: .zero)
+    configureWhenAttached(view, coordinator: context.coordinator)
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    configureWhenAttached(nsView, coordinator: context.coordinator)
+  }
+
+  private func configureWhenAttached(_ view: NSView, coordinator: Coordinator) {
+    DispatchQueue.main.async {
+      guard let window = view.window else { return }
+
+      window.title = "\(AppBrand.displayName) 设置"
+      window.titleVisibility = .hidden
+      window.titlebarAppearsTransparent = true
+      window.titlebarSeparatorStyle = .none
+      window.styleMask.insert(.fullSizeContentView)
+      window.styleMask.insert(.resizable)
+      window.styleMask.remove(.titled)
+      window.hasShadow = true
+      window.isMovableByWindowBackground = true
+      window.minSize = NSSize(width: 760, height: 628)
+      window.isOpaque = false
+      window.backgroundColor = .clear
+
+      if let contentView = window.contentView {
+        contentView.wantsLayer = true
+        contentView.layer?.cornerCurve = .continuous
+        contentView.layer?.cornerRadius = SettingsChrome.cornerRadius
+        contentView.layer?.masksToBounds = true
+
+        if let frameView = contentView.superview {
+          frameView.wantsLayer = true
+          frameView.layer?.cornerCurve = .continuous
+          frameView.layer?.cornerRadius = SettingsChrome.cornerRadius
+          frameView.layer?.masksToBounds = true
+        }
+      }
+
+      window.standardWindowButton(.closeButton)?.isHidden = true
+      window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+      window.standardWindowButton(.zoomButton)?.isHidden = true
+
+      let identifier = ObjectIdentifier(window)
+      if coordinator.configuredWindows.insert(identifier).inserted {
+        window.setContentSize(NSSize(width: 820, height: 680))
+        window.center()
+      }
     }
   }
 }

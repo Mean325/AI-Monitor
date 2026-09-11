@@ -92,7 +92,8 @@ final class AppModelTests: XCTestCase {
     for pane in SettingsPane.allCases {
       let renderer = ImageRenderer(content: SettingsView(model: model, initialPane: pane))
       let image = try XCTUnwrap(renderer.nsImage)
-      XCTAssertEqual(image.size, NSSize(width: 890, height: 760))
+      XCTAssertGreaterThanOrEqual(image.size.width, 760)
+      XCTAssertGreaterThanOrEqual(image.size.height, 600)
       let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(image.tiffRepresentation)))
       let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
       let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")

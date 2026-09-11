@@ -4,15 +4,17 @@ import UniformTypeIdentifiers
 
 struct MenuBarContentView: View {
   @ObservedObject var model: AppModel
-  var checkForUpdates: () -> Void = {}
   @Environment(\.openSettings) private var openSettings
+  private var systemAccent: Color { Color(nsColor: .controlAccentColor) }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 12) {
       header
 
+      sectionLabel("用量概览", systemImage: "chart.bar.xaxis")
       usageSummary
 
+      sectionLabel("同步状态", systemImage: "arrow.triangle.2.circlepath")
       VStack(alignment: .leading, spacing: 5) {
         Label(
           model.statusText,
@@ -30,69 +32,66 @@ struct MenuBarContentView: View {
             .foregroundStyle(.red)
             .fixedSize(horizontal: false, vertical: true)
         }
+
+        HStack {
+          Spacer()
+
+          Button(primarySyncActionTitle) {
+            performPrimarySyncAction()
+          }
+          .buttonStyle(.plain)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(systemAccent)
+          .disabled(model.isSyncing)
+        }
       }
       .font(.caption)
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(12)
-      .modifier(AppGlassPanel(tint: model.lastError == nil ? .teal : .orange, radius: 16))
-
-      AppGlassGroup {
-      HStack {
-        if model.displayMode != .customImage {
-          Button {
-            model.refreshOnly()
-          } label: {
-            Label("刷新", systemImage: "arrow.clockwise")
-          }
-          .disabled(model.isSyncing)
-        } else {
-          Button {
-            chooseCustomImage()
-          } label: {
-            Label("选择图片", systemImage: "photo")
-          }
-          .disabled(model.isSyncing)
-        }
-
-        Button {
-          model.pushNow()
-        } label: {
-          Label("立即推送", systemImage: "paperplane")
-        }
-        .modifier(AppGlassButton(prominent: true))
-        .disabled(model.isSyncing)
-
-        Spacer()
-      }
-      .modifier(AppGlassButton())
-      }
+      .modifier(AppGlassPanel(tint: model.lastError == nil ? systemAccent : .orange, radius: 14))
 
       Divider()
 
       AppGlassGroup {
-      HStack {
-        Button {
-          SettingsWindowPresenter.show(using: openSettings)
-        } label: {
-          Label("设置", systemImage: "gearshape")
-        }
+        HStack {
+          Button {
+            SettingsWindowPresenter.show(using: openSettings)
+          } label: {
+            Label("设置", systemImage: "gearshape")
+          }
 
-        Button(action: checkForUpdates) {
-          Label("检查更新", systemImage: "arrow.down.circle")
-        }
+          Spacer()
 
-        Spacer()
-
-        Button("退出") {
-          NSApplication.shared.terminate(nil)
+          Button("退出") {
+            NSApplication.shared.terminate(nil)
+          }
         }
-      }
-      .modifier(AppGlassButton())
+        .modifier(AppGlassButton())
       }
     }
     .padding(16)
     .frame(width: 320)
-    .modifier(AppGlassPanel(tint: .teal, radius: 24))
+    .modifier(AppGlassPanel(tint: .clear, radius: 24))
+  }
+
+  private func sectionLabel(_ title: String, systemImage: String) -> some View {
+    Label(title, systemImage: systemImage)
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(.secondary)
+      .textCase(.uppercase)
+      .padding(.top, 2)
+  }
+
+  private var primarySyncActionTitle: String {
+    model.displayMode == .customImage ? "选择图片" : "刷新并推送"
+  }
+
+  private func performPrimarySyncAction() {
+    if model.displayMode == .customImage {
+      chooseCustomImage()
+    } else {
+      model.pushNow()
+    }
   }
 
   private var header: some View {
@@ -223,7 +222,7 @@ struct MenuBarContentView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(10)
-    .modifier(AppGlassPanel(tint: .teal, radius: 14))
+    .modifier(AppGlassPanel(tint: systemAccent, radius: 14))
     .overlay(alignment: .bottomTrailing) {
       if let resetText {
         Text(resetText)

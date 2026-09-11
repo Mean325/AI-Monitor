@@ -1,52 +1,80 @@
-# AI 监视器 / AI Monitor
+# AI Monitor
 
-## 开发运行
+一款常驻 macOS 菜单栏的 AI 任务状态与用量监控工具，并可将用量卡片或自定义图片自动推送到 Linx68 键盘屏幕。
 
-安装 Xcode 和 XcodeGen 后，在项目根目录执行：
+<p align="center">
+  <img src="docs/images/menu-popover.png" width="366" alt="AI Monitor 菜单栏面板">
+</p>
+
+## 功能概览
+
+- **菜单栏快速查看**：集中展示当前 AI 的剩余用量、重置时间、同步结果与最近推送时间。
+- **AI 任务状态灯**：使用红、黄、绿三色状态提示等待授权、执行中、完成或空闲。
+- **多 AI 支持**：可切换监控 Codex、Claude Code、Qoder 和 Grok。
+- **Linx68 自动推送**：定时读取数据、生成 142 × 428 JPEG，并通过局域网接口推送到键盘。
+- **丰富卡片样式**：提供多种配色与信息布局，设置中可实时预览最终画面。
+- **自定义图片**：自动裁切图片并保留键盘顶部状态栏安全区。
+- **应用内更新**：从 GitHub Releases 检查并安装新版本，无需重复手动覆盖应用。
+
+## macOS 风格设置
+
+设置窗口按“状态监控、Linx68 推送、通用”组织，选中颜色会跟随 macOS 的系统强调色。窗口支持缩放，标题与内容可连续滚动。
+
+<p align="center">
+  <img src="docs/images/settings-overview.png" width="880" alt="AI Monitor 设置窗口">
+</p>
+
+## 键盘画面
+
+应用会根据当前数据生成适配 Linx68 竖屏的卡片，显示任务状态、剩余用量、可用重置次数和重置时间。
+
+<p align="center">
+  <img src="docs/images/keyboard-card.jpg" width="180" alt="Linx68 键盘用量卡片">
+</p>
+
+## 支持的数据源
+
+| 数据源 | 用量信息 | 任务状态 | 键盘卡片 |
+| --- | :---: | :---: | :---: |
+| Codex | ✓ | ✓ | ✓ |
+| Claude Code | ✓ | ✓ | ✓ |
+| Qoder | ✓ | ✓ | ✓ |
+| Grok CLI | ✓ | ✓ | ✓ |
+
+任务状态来自本机工具运行记录或 Hook，用量数据仅在本机读取。Linx68 推送请求只发送到你在设置中配置的局域网地址。
+
+## 安装与更新
+
+1. 从 [GitHub Releases](https://github.com/Mean325/AI-Monitor/releases/latest) 下载最新 DMG。
+2. 将 **AI Monitor** 拖入“应用程序”并启动。
+3. 在“设置 → Linx68 推送 → 连接与同步”中填写键盘图像上传地址。
+4. 在“设置 → 通用”中可随时检查更新。
+
+> 首次安装支持应用内更新的版本后，后续版本可以直接在应用中完成下载与替换。
+
+## 本地开发
+
+需要 macOS 14 或更高版本、Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen)。在项目根目录运行：
 
 ```bash
+brew install xcodegen
 ./scripts/run-dev.sh
 ```
 
-脚本会重新生成 Xcode 工程、增量构建 Debug 版本、退出旧进程并直接启动最新构建，
-无需反复生成 DMG 或覆盖 `/Applications/AI Monitor.app`。也可以在 Xcode 中选择
-`CodexLinxDisplay` Scheme 后直接按 `Command-R`。
+脚本会生成 Xcode 工程、增量构建 Debug 应用、退出旧进程并启动最新版本，不需要反复生成 DMG 或覆盖 `/Applications/AI Monitor.app`。也可以打开生成的工程，选择 `CodexLinxDisplay` Scheme 后按 `Command-R`。
 
-## 版本管理
+## 版本管理与发布
 
-应用版本统一保存在 `Config/Version.xcconfig`，不要直接修改生成后的
-`Resources/Info.plist` 或 `.xcodeproj`。常用命令：
+版本号统一保存在 `Config/Version.xcconfig`：
 
 ```bash
-./scripts/version.sh current       # 查看版本和构建号
-./scripts/version.sh bump patch    # 0.4.1 -> 0.4.2，同时递增构建号
-./scripts/version.sh bump minor    # 0.4.1 -> 0.5.0，同时递增构建号
-./scripts/version.sh set 1.0.0 10  # 明确设置版本与构建号
+./scripts/version.sh current
+./scripts/version.sh bump patch
+./scripts/version.sh set 1.0.0 10
 ```
 
-推送 `v*` 标签时，发布工作流会先确认标签与应用版本一致，再生成安装包。例如：
+推送与应用版本一致的 `v*` 标签后，GitHub Actions 会构建 DMG/ZIP、生成 Sparkle 更新清单并创建 Release。发布签名、公证和 Sparkle 私钥均由仓库 Secrets 管理。
 
-```bash
-./scripts/version.sh set 0.4.2
-git add Config/Version.xcconfig
-git commit -m "chore: release 0.4.2"
-git tag v0.4.2
-git push origin main v0.4.2
-```
+## 致谢
 
-标签推送后，GitHub Actions 会构建 ZIP/DMG、使用 Sparkle 私钥签名 ZIP、生成
-`appcast.xml` 并一起发布到 GitHub Releases。已安装带更新模块的版本可从菜单栏或
-“设置 → 通用 → 版本更新”点击“检查更新”，随后在应用内完成替换；应用也会每天
-自动检查一次。
-
-当前仓库的 Sparkle 私钥保存在 GitHub Actions 的 `SPARKLE_PRIVATE_KEY` Secret，
-对应公钥保存在 `Config/Version.xcconfig`。不要重新生成或替换这对密钥，否则旧版本
-将无法验证新更新。配置 `ENABLE_SIGNED_RELEASES=true`，并设置工作流所需的 Developer
-ID 与 Apple 公证 Secrets 后，流水线会额外执行签名与公证；未配置时仍会发布 adhoc
-预览包。
-
-> 注意：不包含更新模块的旧安装包无法自行获得该能力，需要安装一次 0.4.1 或更高
-> 版本作为更新基线。此后无需再次手动下载安装包。
-
-## 鸣谢
-[CodexLinxDisplay](https://github.com/kkoscielniak/CodexLinxDisplay) — 初始代码来源
+[CodexLinxDisplay](https://github.com/kkoscielniak/CodexLinxDisplay) — 初始项目来源。

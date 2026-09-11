@@ -30,10 +30,7 @@ struct CodexLinxDisplayApp: App {
 
   var body: some Scene {
     MenuBarExtra {
-      MenuBarContentView(
-        model: model,
-        checkForUpdates: updater.checkForUpdates
-      )
+      MenuBarContentView(model: model)
     } label: {
       MenuBarStatusLabel(
         title: menuBarTitle,
@@ -54,7 +51,7 @@ struct CodexLinxDisplayApp: App {
       )
         .task { model.start() }
     }
-    .windowResizability(.contentSize)
+    .windowResizability(.automatic)
   }
 
   private var menuBarTitle: String {
