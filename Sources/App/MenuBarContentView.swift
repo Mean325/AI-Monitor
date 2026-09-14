@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct MenuBarContentView: View {
   @ObservedObject var model: AppModel
   @Environment(\.openSettings) private var openSettings
+  @Environment(\.dismiss) private var dismiss
+  @State private var menuBarWindow = MenuBarWindowReference()
   private var systemAccent: Color { Color(nsColor: .controlAccentColor) }
 
   var body: some View {
@@ -73,7 +75,11 @@ struct MenuBarContentView: View {
       AppGlassGroup {
         HStack {
           Button {
-            SettingsWindowPresenter.show(using: openSettings)
+            dismiss()
+            menuBarWindow.window?.orderOut(nil)
+            DispatchQueue.main.async {
+              SettingsWindowPresenter.show(using: openSettings)
+            }
           } label: {
             Label("设置", systemImage: "gearshape")
           }
@@ -89,6 +95,7 @@ struct MenuBarContentView: View {
     }
     .padding(16)
     .frame(width: 320)
+    .background(MenuBarWindowReader(reference: menuBarWindow))
   }
 
   private func sectionLabel(_ title: String, systemImage: String) -> some View {
@@ -126,7 +133,7 @@ struct MenuBarContentView: View {
     guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return .secondary }
     if battery <= 10 { return .red }
     if battery <= 20 { return .orange }
-    return .green
+    return .primary
   }
 
   private var batteryAccessibilityText: String {
@@ -142,18 +149,18 @@ struct MenuBarContentView: View {
   }
 
   private var pushStatusSymbol: String {
-    guard let request = model.lastPushRequest else { return "minus.circle" }
+    guard let request = model.lastPushRequest else { return "circle.dashed" }
     switch request.outcome {
-    case .pending: return "clock.arrow.circlepath"
+    case .pending: return "clock.fill"
     case .succeeded: return "checkmark.circle.fill"
-    case .failed: return "exclamationmark.triangle.fill"
+    case .failed: return "xmark.circle.fill"
     }
   }
 
   private var pushStatusColor: Color {
-    guard let request = model.lastPushRequest else { return .secondary }
+    guard let request = model.lastPushRequest else { return .secondary.opacity(0.55) }
     switch request.outcome {
-    case .pending: return .blue
+    case .pending: return systemAccent.opacity(0.8)
     case .succeeded: return .green
     case .failed: return .red
     }
@@ -365,5 +372,39 @@ enum SettingsWindowPresenter {
   static func isSettingsWindow(_ window: NSWindow) -> Bool {
     let title = window.title.lowercased()
     return title.contains("设置") || title.contains("settings")
+  }
+}
+
+/// Capture this popover's own window, rather than relying on NSApp.keyWindow,
+/// which may already point to Settings when the menu action is handled.
+private final class MenuBarWindowReference {
+  weak var window: NSWindow?
+}
+
+private struct MenuBarWindowReader: NSViewRepresentable {
+  let reference: MenuBarWindowReference
+
+  func makeNSView(context: Context) -> WindowView {
+    WindowView(reference: reference)
+  }
+
+  func updateNSView(_ view: WindowView, context: Context) {
+    reference.window = view.window
+  }
+
+  final class WindowView: NSView {
+    let reference: MenuBarWindowReference
+
+    init(reference: MenuBarWindowReference) {
+      self.reference = reference
+      super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      reference.window = window
+    }
   }
 }

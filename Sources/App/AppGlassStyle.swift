@@ -96,6 +96,94 @@ struct AppGlassButton: ViewModifier {
   }
 }
 
+/// Supplies the pre-macOS 26 surface while leaving newer controls transparent
+/// so their native glass button chrome remains visible.
+struct AppGlassChoiceSurface: ViewModifier {
+  var tint: Color
+  var isSelected: Bool
+  var radius: CGFloat = 12
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+    if #available(macOS 26.0, *), !reduceTransparency {
+      content
+    } else {
+      content
+        .background(
+          isSelected ? tint.opacity(0.09) : Color.primary.opacity(0.025),
+          in: shape
+        )
+        .overlay {
+          shape.stroke(
+            isSelected ? tint.opacity(0.55) : Color.primary.opacity(0.07),
+            lineWidth: isSelected ? 1.25 : 1
+          )
+        }
+    }
+  }
+}
+
+/// Turns a custom selection card into a real Liquid Glass element on macOS 26.
+/// `buttonStyle(.glass)` is intentionally not used here: it is tuned for normal
+/// button-sized controls and can become visually indistinguishable from a large
+/// custom card when placed over the settings canvas.
+struct AppGlassChoiceButton: ViewModifier {
+  var tint: Color
+  var isSelected: Bool
+  var radius: CGFloat = 12
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if #available(macOS 26.0, *), !reduceTransparency {
+      content
+        .buttonStyle(.plain)
+        .glassEffect(
+          Glass.regular
+            .tint(isSelected ? tint.opacity(0.24) : nil)
+            .interactive(),
+          in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+        )
+    } else {
+      content.buttonStyle(.plain)
+    }
+  }
+}
+
+/// Native Liquid Glass surface for the custom settings cards. The content and
+/// layout remain app-specific; only the macOS 26 material is system-rendered.
+struct AppGlassCardSurface: ViewModifier {
+  var tint: Color
+  var radius: CGFloat = 18
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.colorScheme) private var colorScheme
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+    if #available(macOS 26.0, *), !reduceTransparency {
+      content
+        .glassEffect(Glass.regular.tint(tint.opacity(0.08)), in: shape)
+    } else {
+      content
+        .background(
+          colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.032),
+          in: shape
+        )
+        .overlay {
+          shape.stroke(
+            colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.055),
+            lineWidth: 0.75
+          )
+        }
+    }
+  }
+}
+
 struct AppGlassGroup<Content: View>: View {
   @ViewBuilder var content: () -> Content
   @ViewBuilder var body: some View {

@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum SettingsChrome {
-  static let cornerRadius: CGFloat = 14
+  static let cornerRadius: CGFloat = 16
 }
 
 struct SettingsView: View {
@@ -15,7 +15,11 @@ struct SettingsView: View {
 
   @State private var selectedPane: SettingsPane = .monitoring
   @State private var selectedLinxPane = 0
-  @State private var hoveringWindowControls = false
+  @State private var searchText = ""
+  @State private var hoveredPane: SettingsPane?
+  @State private var backHistory: [SettingsPane] = []
+  @State private var forwardHistory: [SettingsPane] = []
+  @Environment(\.controlActiveState) private var controlActiveState
   @State private var showingPushRequestDetails = false
 
   private let intervals = [10, 30, 60, 300, 600, 1_800]
@@ -33,35 +37,38 @@ struct SettingsView: View {
   }
 
   var body: some View {
-    HStack(spacing: 14) {
+    HStack(spacing: 0) {
       sidebar
-        .frame(width: 230)
+        .frame(width: 215)
         .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.cornerRadius, style: .continuous))
-        .overlay {
-          RoundedRectangle(cornerRadius: SettingsChrome.cornerRadius, style: .continuous)
-            .stroke(sidebarBorderColor, lineWidth: 0.75)
-        }
+        .padding(.leading, 8)
+        .padding(.vertical, 8)
 
-      ZStack {
-        detailBackground
-
-        VStack(spacing: 0) {
-          detailBody
-            .padding(.top, 28)
-        }
+      VStack(spacing: 0) {
+        navigationBar
+        detailBody
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .padding(6)
-    .frame(
-      minWidth: 760,
-      idealWidth: 820,
-      maxWidth: .infinity,
-      minHeight: 600,
-      idealHeight: 680,
-      maxHeight: .infinity
-    )
+    .frame(minWidth: 720, idealWidth: 760, maxWidth: .infinity,
+           minHeight: 600, idealHeight: 660, maxHeight: .infinity)
+    .font(.system(size: 13))
+    .controlSize(.small)
     .background(detailCanvasBackground)
-    .background(SettingsWindowConfigurator())
+    .toolbar(.hidden, for: .windowToolbar)
+    .toolbarBackground(.hidden, for: .windowToolbar)
+    .background(SettingsWindowConfigurator(pane: selectedPane))
+    .background {
+      SettingsPreviewCompanion(
+        isPresented: selectedPane == .linx && model.isLinxEnabled && selectedLinxPane == 0,
+        content: AnyView(previewCard
+          .frame(width: 188)
+          .fixedSize(horizontal: false, vertical: true)
+          .font(.system(size: 13))
+          .controlSize(.small)
+          .environment(\.colorScheme, colorScheme))
+      )
+    }
     .ignoresSafeArea(.container, edges: .top)
     .sheet(isPresented: $showingPushRequestDetails) {
       pushRequestDetails
@@ -72,83 +79,113 @@ struct SettingsView: View {
     selectedPane
   }
 
-  @ViewBuilder
-  private var detailBody: some View {
-    ScrollView {
-      VStack(spacing: 0) {
-        detailHeader
+  private var navigationBar: some View {
+    HStack(spacing: 0) {
+      HStack(spacing: 0) {
+        Button {
+          guard let pane = backHistory.popLast() else { return }
+          forwardHistory.append(selectedPane)
+          selectedPane = pane
+        } label: {
+          Image(systemName: "chevron.left").frame(width: 34, height: 34)
+        }
+        .disabled(backHistory.isEmpty)
+        .help("返回")
+        .accessibilityLabel("返回")
 
-        detailContent
-          .padding(.top, 8)
-          .padding(.bottom, 14)
+        Divider().frame(height: 16).opacity(0.4)
+
+        Button {
+          guard let pane = forwardHistory.popLast() else { return }
+          backHistory.append(selectedPane)
+          selectedPane = pane
+        } label: {
+          Image(systemName: "chevron.right").frame(width: 34, height: 34)
+        }
+        .disabled(forwardHistory.isEmpty)
+        .help("前进")
+        .accessibilityLabel("前进")
+      }
+      .font(.system(size: 15, weight: .medium))
+      .buttonStyle(.plain)
+      .background(systemGroupBackground, in: Capsule())
+      Spacer()
+    }
+    .padding(.leading, 8)
+    .frame(height: 52)
+  }
+
+  private var detailBody: some View {
+    ScrollViewReader { proxy in
+      ScrollView {
+        VStack(spacing: 10) {
+          detailHeader.id("paneTop")
+          detailContent
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 20)
+        .padding(.bottom, 20)
+      }
+      .scrollIndicators(.automatic)
+      .onChange(of: selectedPane) { _, _ in
+        proxy.scrollTo("paneTop", anchor: .top)
+      }
+      .onChange(of: selectedLinxPane) { _, _ in
+        proxy.scrollTo("paneTop", anchor: .top)
       }
     }
-    .scrollIndicators(.automatic)
   }
 
   private var sidebar: some View {
     VStack(spacing: 0) {
-      windowControls
+      SettingsTrafficLights()
+        .frame(width: 70, height: 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 28)
+
+      HStack(spacing: 5) {
+        Image(systemName: "magnifyingglass")
+          .foregroundStyle(.secondary)
+        TextField("搜索", text: $searchText)
+          .textFieldStyle(.plain)
+          .accessibilityLabel("搜索设置")
+        if !searchText.isEmpty {
+          Button { searchText = "" } label: {
+            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("清除搜索")
+        }
+      }
+      .padding(.horizontal, 9)
+      .frame(height: 28)
+      .background(Color.primary.opacity(0.065), in: Capsule())
+      .padding(.horizontal, 10)
 
       brandHeader
 
       ScrollView {
         VStack(spacing: sidebarItemSpacing) {
-          ForEach(SettingsPane.allCases) { pane in
+          ForEach(SettingsPane.allCases.filter {
+            searchText.isEmpty || ($0.title + $0.subtitle + $0.searchKeywords)
+              .localizedCaseInsensitiveContains(searchText)
+          }) { pane in
             sidebarItem(pane)
           }
+          if !searchText.isEmpty && !SettingsPane.allCases.contains(where: {
+            ($0.title + $0.subtitle + $0.searchKeywords).localizedCaseInsensitiveContains(searchText)
+          }) {
+            Text("未找到设置").foregroundStyle(.secondary).padding(.top, 12)
+          }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 10)
         .padding(.vertical, 10)
       }
       .scrollIndicators(.hidden)
     }
     .background(sidebarBackground)
-  }
-
-  private var windowControls: some View {
-    HStack(spacing: 8) {
-      windowControlButton(color: Color(red: 1.0, green: 0.37, blue: 0.34), symbol: "xmark") {
-        NSApp.keyWindow?.performClose(nil)
-      }
-
-      windowControlButton(color: Color(red: 1.0, green: 0.74, blue: 0.05), symbol: "minus") {
-        NSApp.keyWindow?.miniaturize(nil)
-      }
-
-      windowControlButton(color: Color(red: 0.16, green: 0.78, blue: 0.35), symbol: "arrow.up.left.and.arrow.down.right") {
-        NSApp.keyWindow?.zoom(nil)
-      }
-
-      Spacer(minLength: 0)
-    }
-    .padding(.horizontal, 20)
-    .padding(.top, 15)
-    .frame(height: 38, alignment: .top)
-    .onHover { hoveringWindowControls = $0 }
-  }
-
-  private func windowControlButton(
-    color: Color,
-    symbol: String,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      Circle()
-        .fill(color)
-        .frame(width: 13, height: 13)
-        .overlay {
-          Image(systemName: symbol)
-            .font(.system(size: 6, weight: .black))
-            .foregroundStyle(Color.black.opacity(0.58))
-            .opacity(hoveringWindowControls ? 1 : 0)
-        }
-        .overlay {
-          Circle()
-            .stroke(Color.black.opacity(0.16), lineWidth: 0.5)
-        }
-    }
-    .buttonStyle(.plain)
   }
 
   private var brandHeader: some View {
@@ -180,12 +217,13 @@ struct SettingsView: View {
 
       Spacer(minLength: 0)
     }
-    .padding(.horizontal, 18)
-    .padding(.vertical, 10)
+    .padding(.horizontal, 16)
+    .padding(.top, 16)
+    .padding(.bottom, 20)
   }
 
-  private let sidebarItemHeight: CGFloat = 40
-  private let sidebarItemSpacing: CGFloat = 4
+  private let sidebarItemHeight: CGFloat = 32
+  private let sidebarItemSpacing: CGFloat = 0
 
   private var sidebarSelectionAnimation: Animation? {
     reduceMotion ? nil : .easeInOut(duration: 0.2)
@@ -193,45 +231,34 @@ struct SettingsView: View {
 
   private func sidebarItem(_ pane: SettingsPane) -> some View {
     let isSelected = selectedPane == pane
-    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    let emphasized = isSelected && controlActiveState != .inactive
+    let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
     return Button {
-      withAnimation(sidebarSelectionAnimation) {
-        selectedPane = pane
-      }
+      guard selectedPane != pane else { return }
+      backHistory.append(selectedPane)
+      forwardHistory.removeAll()
+      withAnimation(sidebarSelectionAnimation) { selectedPane = pane }
     } label: {
-      HStack(spacing: 11) {
-        Image(systemName: pane.symbol)
-          .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(.white)
-          .frame(width: 25, height: 25)
-          .background(
-            isSelected ? Color.white.opacity(0.18) : pane.tint,
-            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-          )
-          .shadow(color: .black.opacity(isSelected ? 0 : 0.12), radius: 1.5, y: 1)
-
+      HStack(spacing: 7) {
+        SettingsSystemIcon(kind: pane.systemIcon, size: 20)
         Text(pane.title)
-          .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-          .foregroundStyle(isSelected ? Color.white : Color.primary)
-
+          .font(.system(size: 13))
+          .foregroundStyle(emphasized ? Color.white : Color.primary)
         Spacer(minLength: 0)
       }
-      .padding(.horizontal, 10)
+      .padding(.horizontal, 6)
       .frame(height: sidebarItemHeight)
-      .background(isSelected ? systemAccent : Color.clear, in: shape)
+      .background(isSelected ? (emphasized ? Color(nsColor: .selectedContentBackgroundColor) : Color.primary.opacity(0.10)) : Color.primary.opacity(hoveredPane == pane ? 0.04 : 0), in: shape)
       .contentShape(shape)
     }
     .buttonStyle(.plain)
+    .onHover { hoveredPane = $0 ? pane : nil }
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   private var keyboardStatusPanel: some View {
-    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-
-    return keyboardStatusContent
-      .background(Color.primary.opacity(0.025), in: shape)
-      .overlay { shape.stroke(Color.primary.opacity(0.08), lineWidth: 1) }
+    keyboardStatusContent
   }
 
   private var keyboardStatusContent: some View {
@@ -298,7 +325,6 @@ struct SettingsView: View {
       .buttonStyle(.plain)
       .help("查看最近一次 HTTP 请求详情")
     }
-    .padding(12)
     .frame(maxWidth: .infinity)
     .onAppear {
       model.refreshBluetoothKeyboardInfo()
@@ -384,6 +410,7 @@ struct SettingsView: View {
         Button("完成") {
           showingPushRequestDetails = false
         }
+        .modifier(AppGlassButton(prominent: true))
         .keyboardShortcut(.defaultAction)
       }
     }
@@ -406,45 +433,23 @@ struct SettingsView: View {
   }
 
   private var detailHeader: some View {
-    ZStack(alignment: .topTrailing) {
-      VStack(spacing: 9) {
-        ZStack {
-          RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(detailIconBackground)
+    VStack(spacing: 0) {
+      SettingsSystemIcon(kind: activePane.systemIcon, size: 52)
+        .padding(.bottom, 10)
 
-          Image(systemName: activePane.symbol)
-            .font(.system(size: 28, weight: .medium))
-            .foregroundStyle(detailIconForeground)
-        }
-        .frame(width: 58, height: 58)
-        .overlay {
-          RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .stroke(detailIconBorderColor, lineWidth: 0.75)
-        }
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.14), radius: 3, y: 1)
-
-        Text(activePane.title)
-          .font(.system(size: 25, weight: .bold))
-
-        Text(activePane.subtitle)
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-      }
-      .frame(maxWidth: .infinity)
-
+      Text(activePane.title)
+        .font(.system(size: 22, weight: .bold))
+        .padding(.bottom, 2)
+      Text(activePane.subtitle)
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
     }
     .frame(maxWidth: .infinity)
-    .padding(.horizontal, 28)
-    .padding(.top, 10)
-    .padding(.bottom, 18)
-    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .stroke(Color.primary.opacity(0.045), lineWidth: 1)
-    }
-    .padding(.top, 0)
-    .padding(.bottom, 8)
+    .padding(.horizontal, 20)
+    .padding(.vertical, 24)
+    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
   }
 
   @ViewBuilder
@@ -494,23 +499,24 @@ struct SettingsView: View {
   }
 
   private var displayPane: some View {
-    HStack(alignment: .top, spacing: 16) {
-      VStack(spacing: 16) {
+    VStack(spacing: 10) {
           settingsCard(
           title: "显示内容",
           subtitle: "选择键盘屏幕上展示的信息",
           symbol: "rectangle.2.swap",
           tint: .blue
         ) {
-          LazyVGrid(
-            columns: [
-              GridItem(.flexible(), spacing: 8),
-              GridItem(.flexible(), spacing: 8),
-            ],
-            spacing: 8
-          ) {
-            displayModeOption(model.selectedAIMode, title: "AI 用量")
-            displayModeOption(.customImage)
+          AppGlassGroup {
+            LazyVGrid(
+              columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+              ],
+              spacing: 8
+            ) {
+              displayModeOption(model.selectedAIMode, title: "AI 用量")
+              displayModeOption(.customImage)
+            }
           }
 
           Divider().opacity(0.5)
@@ -573,15 +579,17 @@ struct SettingsView: View {
             symbol: "paintpalette",
             tint: selectedColorAccent
           ) {
-            LazyVGrid(
-              columns: [
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10),
-              ],
-              spacing: 10
-            ) {
-              ForEach(UsageCardColorScheme.allCases) { colorScheme in
-                usageColorOption(colorScheme)
+            AppGlassGroup {
+              LazyVGrid(
+                columns: [
+                  GridItem(.flexible(), spacing: 10),
+                  GridItem(.flexible(), spacing: 10),
+                ],
+                spacing: 10
+              ) {
+                ForEach(UsageCardColorScheme.allCases) { colorScheme in
+                  usageColorOption(colorScheme)
+                }
               }
             }
           }
@@ -593,15 +601,17 @@ struct SettingsView: View {
               symbol: "rectangle.3.group",
               tint: selectedColorAccent
             ) {
-              LazyVGrid(
-                columns: [
-                  GridItem(.flexible(), spacing: 10),
-                  GridItem(.flexible(), spacing: 10),
-                ],
-                spacing: 10
-              ) {
-                ForEach(UsageCardDesign.selectableCases) { design in
-                  usageDesignOption(design)
+              AppGlassGroup {
+                LazyVGrid(
+                  columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10),
+                  ],
+                  spacing: 10
+                ) {
+                  ForEach(UsageCardDesign.selectableCases) { design in
+                    usageDesignOption(design)
+                  }
                 }
               }
             }
@@ -665,13 +675,8 @@ struct SettingsView: View {
             }
             .padding(12)
           }
-      }
-      .frame(maxWidth: .infinity)
-
-      previewCard
-        .frame(width: 188)
     }
-    .frame(maxHeight: .infinity, alignment: .top)
+    .frame(maxWidth: .infinity, alignment: .top)
   }
 
   private var previewCard: some View {
@@ -712,7 +717,7 @@ struct SettingsView: View {
         RoundedRectangle(cornerRadius: 9, style: .continuous)
           .stroke(.white.opacity(0.12), lineWidth: 1)
       }
-      .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
+      .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
       .frame(maxWidth: .infinity)
 
       Text(previewDescription)
@@ -723,7 +728,7 @@ struct SettingsView: View {
   }
 
   private var connectionPane: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: 10) {
       settingsCard(
         title: "设备接口",
         subtitle: "连接 Linx68 图像上传服务",
@@ -800,12 +805,11 @@ struct SettingsView: View {
         }
       }
     }
-    .frame(maxWidth: 620)
     .frame(maxWidth: .infinity)
   }
 
   private var monitoringPane: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: 10) {
       settingsCard(
         title: "任务监控展示",
         subtitle: "跟随当前选择的 AI，同步任务状态",
@@ -814,32 +818,41 @@ struct SettingsView: View {
       ) {
         Text("当前 AI")
           .font(.caption).foregroundStyle(.secondary)
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-          ForEach(DisplayMode.allCases.filter(\.isUsageMode)) { mode in
-            monitoringOption(
-              title: mode.title,
-              mode: mode,
-              tint: monitoringTint(for: mode),
-              isSelected: model.selectedAIMode == mode
-            ) {
-              model.setSelectedAI(mode)
+        AppGlassGroup {
+          LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(DisplayMode.allCases.filter(\.isUsageMode)) { mode in
+              monitoringOption(
+                title: mode.title,
+                mode: mode,
+                tint: monitoringTint(for: mode),
+                isSelected: model.selectedAIMode == mode
+              ) {
+                model.setSelectedAI(mode)
+              }
             }
           }
         }
-        Toggle("状态栏展示任务监控", isOn: $model.showTaskStatusInMenuBar)
-          .toggleStyle(.switch)
-          .tint(systemAccent)
-          .padding(.vertical, 6)
+        HStack {
+          Text("状态栏展示任务监控")
+          Spacer()
+          Toggle("状态栏展示任务监控", isOn: $model.showTaskStatusInMenuBar)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .tint(systemAccent)
+        }
+        .padding(.vertical, 6)
         if model.showTaskStatusInMenuBar {
           Text("原图标位置")
             .font(.caption).foregroundStyle(.secondary)
-          LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
-            ForEach(MenuBarOriginalIconPosition.allCases) { position in
-              monitoringOption(title: position.title,
-                symbol: position == .hidden ? "eye.slash" : (position == .left ? "align.horizontal.left" : "align.horizontal.right"),
-                tint: .indigo, isSelected: model.menuBarOriginalIconPosition == position) {
-                  model.menuBarOriginalIconPosition = position
+          AppGlassGroup {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
+              ForEach(MenuBarOriginalIconPosition.allCases) { position in
+                monitoringOption(title: position.title,
+                  symbol: position == .hidden ? "eye.slash" : (position == .left ? "align.horizontal.left" : "align.horizontal.right"),
+                  tint: .indigo, isSelected: model.menuBarOriginalIconPosition == position) {
+                    model.menuBarOriginalIconPosition = position
                 }
+              }
             }
           }
         }
@@ -1064,12 +1077,11 @@ struct SettingsView: View {
 
       }
     }
-    .frame(maxWidth: 620)
     .frame(maxWidth: .infinity)
   }
 
   private var generalPane: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: 10) {
       settingsCard(
         title: "启动设置",
         subtitle: "控制应用随系统登录自动运行",
@@ -1103,7 +1115,9 @@ struct SettingsView: View {
           title: AppBrand.versionDescription,
           subtitle: "发布版每天自动检查一次，也可以立即检查"
         ) {
-          Button("检查更新", action: checkForUpdates)
+          regularGlassButton(action: checkForUpdates) {
+            Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
+          }
         }
       }
 
@@ -1144,14 +1158,10 @@ struct SettingsView: View {
         }
       }
     }
-    .frame(maxWidth: 620)
     .frame(maxWidth: .infinity)
   }
 
-  private var detailBackground: some View {
-    detailCanvasBackground
-      .ignoresSafeArea()
-  }
+
 
   private var sidebarBackground: some View {
     ZStack {
@@ -1166,41 +1176,31 @@ struct SettingsView: View {
   }
 
   private var detailCanvasBackground: Color {
-    Color(nsColor: .windowBackgroundColor)
+    colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : .white
   }
 
   private var sidebarOpaqueBackground: Color {
     colorScheme == .dark
       ? Color(nsColor: .underPageBackgroundColor)
-      : Color(nsColor: .windowBackgroundColor)
+      : Color(white: 0.97)
   }
 
   private var sidebarMaterialWash: Color {
     colorScheme == .dark
       ? Color.black.opacity(0.10)
-      : Color.white.opacity(0.68)
+      : Color.white.opacity(0.72)
   }
 
-  private var sidebarBorderColor: Color {
-    colorScheme == .dark ? Color.white.opacity(0.09) : Color.white.opacity(0.72)
-  }
 
-  private var detailIconBackground: Color {
-    colorScheme == .dark
-      ? Color(nsColor: .quaternaryLabelColor)
-      : Color(nsColor: .tertiaryLabelColor)
-  }
 
-  private var detailIconForeground: Color {
-    colorScheme == .dark ? Color.white.opacity(0.92) : .white
-  }
 
-  private var detailIconBorderColor: Color {
-    colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.10)
-  }
+
+
+
+
 
   private var systemGroupBackground: Color {
-    colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.032)
+    colorScheme == .dark ? Color.white.opacity(0.07) : Color(white: 0.965)
   }
 
   private func settingsCard<Content: View>(
@@ -1212,22 +1212,13 @@ struct SettingsView: View {
     showPushAction: Bool = false,
     @ViewBuilder content: () -> Content
   ) -> some View {
-    VStack(alignment: .leading, spacing: 13) {
+    VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 10) {
-        Image(systemName: symbol)
-          .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(cardIconForeground)
-          .frame(width: 30, height: 30)
-          .background(cardIconBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-          .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-              .stroke(cardIconBorderColor, lineWidth: 0.5)
-          }
-          .shadow(color: .black.opacity(colorScheme == .dark ? 0.24 : 0.12), radius: 1.5, y: 1)
+        SettingsSystemIcon(kind: .forSymbol(symbol), size: 20)
 
         VStack(alignment: .leading, spacing: 1) {
           Text(title)
-            .font(.headline)
+            .font(.system(size: 13, weight: .medium))
           Text(subtitle)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -1261,31 +1252,11 @@ struct SettingsView: View {
 
       content()
     }
-    .padding(16)
-    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .stroke(cardBorderColor, lineWidth: 0.75)
-    }
+    .padding(12)
+    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
   }
 
-  private var cardIconBackground: Color {
-    colorScheme == .dark
-      ? Color(nsColor: .quaternaryLabelColor)
-      : Color(nsColor: .tertiaryLabelColor)
-  }
 
-  private var cardIconForeground: Color {
-    colorScheme == .dark ? Color.white.opacity(0.9) : .white
-  }
-
-  private var cardIconBorderColor: Color {
-    colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09)
-  }
-
-  private var cardBorderColor: Color {
-    colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.055)
-  }
 
   private func displayModeOption(_ mode: DisplayMode, title: String? = nil) -> some View {
     let isSelected = model.displayMode == mode
@@ -1310,17 +1281,15 @@ struct SettingsView: View {
           .lineLimit(1)
 
         Spacer(minLength: 0)
+
+        Image(systemName: isSelected ? "circle.inset.filled" : "circle")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(isSelected ? systemAccent : Color.secondary)
       }
       .padding(.horizontal, 9)
       .padding(.vertical, 8)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? systemAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
-      .overlay {
-        shape.stroke(
-          isSelected ? systemAccent.opacity(0.55) : Color.primary.opacity(0.07),
-          lineWidth: isSelected ? 1.25 : 1
-        )
-      }
+      .modifier(SettingsChoiceSurface(tint: systemAccent, isSelected: isSelected))
       .contentShape(shape)
     }
     .buttonStyle(.plain)
@@ -1372,18 +1341,13 @@ struct SettingsView: View {
           .foregroundStyle(.primary)
           .lineLimit(1)
         Spacer(minLength: 0)
-        Image(systemName: "checkmark.circle.fill")
+        Image(systemName: isSelected ? "circle.inset.filled" : "circle")
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(systemAccent)
-          .opacity(isSelected ? 1 : 0)
+          .foregroundStyle(isSelected ? systemAccent : Color.secondary)
       }
       .padding(9)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? systemAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
-      .overlay {
-        shape.stroke(isSelected ? systemAccent.opacity(0.55) : Color.primary.opacity(0.07),
-          lineWidth: isSelected ? 1.25 : 1)
-      }
+      .modifier(SettingsChoiceSurface(tint: systemAccent, isSelected: isSelected))
       .contentShape(shape)
     }
     .buttonStyle(.plain)
@@ -1446,20 +1410,13 @@ struct SettingsView: View {
 
         Spacer(minLength: 0)
 
-        Image(systemName: "checkmark.circle.fill")
+        Image(systemName: isSelected ? "circle.inset.filled" : "circle")
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(palette.accent)
-          .opacity(isSelected ? 1 : 0)
+          .foregroundStyle(isSelected ? palette.accent : Color.secondary)
       }
       .padding(9)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? palette.accent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
-      .overlay {
-        shape.stroke(
-          isSelected ? palette.accent.opacity(0.55) : Color.primary.opacity(0.07),
-          lineWidth: isSelected ? 1.25 : 1
-        )
-      }
+      .modifier(SettingsChoiceSurface(tint: palette.accent, isSelected: isSelected))
       .contentShape(shape)
     }
     .buttonStyle(.plain)
@@ -1496,20 +1453,13 @@ struct SettingsView: View {
 
         Spacer(minLength: 0)
 
-        Image(systemName: "checkmark.circle.fill")
+        Image(systemName: isSelected ? "circle.inset.filled" : "circle")
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(systemAccent)
-          .opacity(isSelected ? 1 : 0)
+          .foregroundStyle(isSelected ? systemAccent : Color.secondary)
       }
       .padding(9)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(isSelected ? systemAccent.opacity(0.09) : Color.primary.opacity(0.025), in: shape)
-      .overlay {
-        shape.stroke(
-          isSelected ? systemAccent.opacity(0.55) : Color.primary.opacity(0.07),
-          lineWidth: isSelected ? 1.25 : 1
-        )
-      }
+      .modifier(SettingsChoiceSurface(tint: systemAccent, isSelected: isSelected))
       .contentShape(shape)
     }
     .buttonStyle(.plain)
@@ -1522,7 +1472,7 @@ struct SettingsView: View {
     @ViewBuilder content: () -> Content
   ) -> some View {
     content()
-      .modifier(AppGlassPanel(tint: tint))
+      .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 12))
   }
 
   private func settingRow<Accessory: View>(
@@ -1807,11 +1757,27 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     }
   }
 
+  var searchKeywords: String {
+    switch self {
+    case .monitoring: return "Codex Claude Qoder Grok AI 菜单栏 Hook 任务 状态"
+    case .linx: return "键盘 图片 预览 颜色 主题 蓝牙 电量 同步 接口 刷新 推送"
+    case .general: return "启动 登录 版本 更新 关于"
+    }
+  }
+
   var subtitle: String {
     switch self {
     case .monitoring: return "配置菜单栏展示，查看各 AI 的任务状态"
     case .linx: return "配置键盘画面、设备连接与同步推送"
     case .general: return "启动行为与应用信息"
+    }
+  }
+
+  fileprivate var systemIcon: SettingsSystemIcon.Kind {
+    switch self {
+    case .monitoring: return .monitoring
+    case .linx: return .keyboard
+    case .general: return .general
     }
   }
 
@@ -1833,6 +1799,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 }
 
 private struct SettingsWindowConfigurator: NSViewRepresentable {
+  var pane: SettingsPane
   final class Coordinator {
     var configuredWindows = Set<ObjectIdentifier>()
   }
@@ -1859,28 +1826,17 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
       window.titleVisibility = .hidden
       window.titlebarAppearsTransparent = true
       window.titlebarSeparatorStyle = .none
+      // Keep AppKit's titled-window behavior without a toolbar covering the
+      // full-size SwiftUI content at the top of the inset sidebar.
+      window.toolbar = nil
       window.styleMask.insert(.fullSizeContentView)
       window.styleMask.insert(.resizable)
-      window.styleMask.remove(.titled)
+      window.styleMask.insert(.titled)
       window.hasShadow = true
       window.isMovableByWindowBackground = true
-      window.minSize = NSSize(width: 760, height: 628)
+      window.minSize = NSSize(width: 720, height: 600)
       window.isOpaque = false
       window.backgroundColor = .clear
-
-      if let contentView = window.contentView {
-        contentView.wantsLayer = true
-        contentView.layer?.cornerCurve = .continuous
-        contentView.layer?.cornerRadius = SettingsChrome.cornerRadius
-        contentView.layer?.masksToBounds = true
-
-        if let frameView = contentView.superview {
-          frameView.wantsLayer = true
-          frameView.layer?.cornerCurve = .continuous
-          frameView.layer?.cornerRadius = SettingsChrome.cornerRadius
-          frameView.layer?.masksToBounds = true
-        }
-      }
 
       window.standardWindowButton(.closeButton)?.isHidden = true
       window.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -1888,9 +1844,262 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
 
       let identifier = ObjectIdentifier(window)
       if coordinator.configuredWindows.insert(identifier).inserted {
-        window.setContentSize(NSSize(width: 820, height: 680))
+        window.setContentSize(NSSize(width: 760, height: 660))
         window.center()
       }
     }
+  }
+}
+
+/// The same AppKit controls as a titled window, positioned in the inset sidebar.
+private struct SettingsTrafficLights: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView()
+    let buttons: [(NSWindow.ButtonType, Selector)] = [
+      (.closeButton, #selector(NSWindow.performClose(_:))),
+      (.miniaturizeButton, #selector(NSWindow.performMiniaturize(_:))),
+      (.zoomButton, #selector(NSWindow.performZoom(_:))),
+    ]
+    for (index, item) in buttons.enumerated() {
+      guard let button = NSWindow.standardWindowButton(item.0, for: [.titled, .closable, .miniaturizable, .resizable]) else { continue }
+      button.setFrameOrigin(NSPoint(x: index * 23, y: 1))
+      button.action = item.1
+      view.addSubview(button)
+    }
+    return view
+  }
+
+  func updateNSView(_ view: NSView, context: Context) {
+    DispatchQueue.main.async {
+      for case let button as NSButton in view.subviews { button.target = view.window }
+    }
+  }
+}
+
+private struct SettingsChoiceSurface: ViewModifier {
+  let tint: Color
+  let isSelected: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .background(isSelected ? tint.opacity(0.08) : Color.primary.opacity(0.025),
+                  in: RoundedRectangle(cornerRadius: 8))
+      .overlay {
+        RoundedRectangle(cornerRadius: 8)
+          .strokeBorder(isSelected ? tint.opacity(0.5) : Color.primary.opacity(0.06), lineWidth: 0.75)
+      }
+  }
+}
+
+/// Ask AppKit for the installed System Settings extension's icon. This keeps
+/// the system's actual artwork and rendering instead of redrawing its symbols.
+private struct SettingsSystemIcon: View {
+  enum Kind: String, CaseIterable {
+    case general, monitoring, keyboard, display, appearance, network, login, update, about, sync
+
+    var path: String {
+      let root = "/System/Library/ExtensionKit/Extensions/"
+      switch self {
+      case .general: return "/System/Applications/System Settings.app/Contents/PlugIns/GeneralSettings.appex"
+      case .monitoring: return root + "ControlCenterSettings.appex"
+      case .keyboard: return root + "KeyboardSettings.appex"
+      case .display: return root + "DisplaysExt.appex"
+      case .appearance: return root + "Appearance.appex"
+      case .network: return root + "Network.appex"
+      case .login: return root + "LoginItems.appex"
+      case .update: return root + "SoftwareUpdateSettingsExtension.appex"
+      case .about: return root + "AboutExtension.appex"
+      case .sync: return root + "DateAndTime Extension.appex"
+      }
+    }
+
+    var fallback: String {
+      switch self {
+      case .general: return "gear"
+      case .monitoring: return "switch.2"
+      case .keyboard: return "keyboard"
+      case .display: return "sun.max.fill"
+      case .appearance: return "circle.lefthalf.filled"
+      case .network: return "network"
+      case .login: return "list.bullet"
+      case .update: return "gear.badge"
+      case .about: return "laptopcomputer"
+      case .sync: return "clock"
+      }
+    }
+
+    static func forSymbol(_ symbol: String) -> Kind {
+      switch symbol {
+      case "keyboard", "keyboard.badge.ellipsis": return .keyboard
+      case "rectangle.2.swap", "slider.horizontal.3": return .display
+      case "paintpalette", "rectangle.3.group": return .appearance
+      case "network", "checkmark.circle.fill", "exclamationmark.triangle.fill": return .network
+      case "power": return .login
+      case "arrow.triangle.2.circlepath": return .update
+      case "info.circle": return .about
+      case "clock.arrow.trianglehead.counterclockwise.rotate.90": return .sync
+      default: return .monitoring
+      }
+    }
+  }
+
+  let kind: Kind
+  let size: CGFloat
+
+  private static let images: [Kind: NSImage] = Dictionary(uniqueKeysWithValues:
+    Kind.allCases.compactMap { kind in
+      guard FileManager.default.fileExists(atPath: kind.path) else { return nil }
+      return (kind, NSWorkspace.shared.icon(forFile: kind.path))
+    })
+
+  var body: some View {
+    if let image = Self.images[kind] {
+      Image(nsImage: image)
+        .resizable()
+        .interpolation(.high)
+        .frame(width: size * 1.18, height: size * 1.18)
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    } else {
+      Image(systemName: kind.fallback)
+        .font(.system(size: size * 0.65))
+        .foregroundStyle(.white)
+        .frame(width: size, height: size)
+        .background(Color.gray.gradient, in: RoundedRectangle(cornerRadius: size * 0.24))
+        .accessibilityHidden(true)
+    }
+  }
+}
+
+/// An owned child panel keeps the preview outside the settings canvas while
+/// AppKit handles window ordering, Spaces, and moving the two windows together.
+private struct SettingsPreviewCompanion: NSViewRepresentable {
+  let isPresented: Bool
+  let content: AnyView
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
+
+  func makeNSView(context: Context) -> AnchorView {
+    let view = AnchorView()
+    view.didAttach = { [weak coordinator = context.coordinator] window in
+      coordinator?.attach(to: window)
+    }
+    return view
+  }
+
+  func updateNSView(_ view: AnchorView, context: Context) {
+    context.coordinator.isPresented = isPresented
+    context.coordinator.update(content: content)
+    DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in
+      coordinator?.attach(to: view?.window)
+      coordinator?.synchronize()
+    }
+  }
+
+  static func dismantleNSView(_ view: AnchorView, coordinator: Coordinator) {
+    view.didAttach = nil
+    coordinator.detach()
+  }
+
+  final class AnchorView: NSView {
+    var didAttach: ((NSWindow?) -> Void)?
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      didAttach?(window)
+    }
+  }
+
+  final class Coordinator {
+    var isPresented = false
+    private weak var owner: NSWindow?
+    private var observations: [NSObjectProtocol] = []
+    private let panel: NSPanel
+    private let hosting = NSHostingView(rootView: AnyView(EmptyView()))
+
+    init() {
+      panel = NSPanel(contentRect: .zero,
+                      styleMask: [.borderless, .nonactivatingPanel],
+                      backing: .buffered, defer: false)
+      panel.title = "键盘预览"
+      panel.isReleasedWhenClosed = false
+      panel.isFloatingPanel = false
+      panel.hidesOnDeactivate = false
+      panel.isExcludedFromWindowsMenu = true
+      panel.collectionBehavior = [.fullScreenAuxiliary, .ignoresCycle]
+      panel.backgroundColor = .clear
+      panel.isOpaque = false
+      panel.hasShadow = true
+      panel.contentView = hosting
+      hosting.wantsLayer = true
+      hosting.layer?.cornerRadius = 12
+      hosting.layer?.cornerCurve = .continuous
+      hosting.layer?.masksToBounds = true
+    }
+
+    func update(content: AnyView) {
+      hosting.rootView = content
+    }
+
+    func attach(to window: NSWindow?) {
+      guard owner !== window else { return }
+      detach()
+      owner = window
+      guard let window else { return }
+      let center = NotificationCenter.default
+      for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification,
+                   NSWindow.didChangeScreenNotification, NSWindow.didBecomeKeyNotification,
+                   NSWindow.didDeminiaturizeNotification] {
+        observations.append(center.addObserver(forName: name, object: window, queue: .main) {
+          [weak self] _ in self?.synchronize()
+        })
+      }
+      for name in [NSWindow.willCloseNotification, NSWindow.didMiniaturizeNotification] {
+        observations.append(center.addObserver(forName: name, object: window, queue: .main) {
+          [weak self] _ in self?.hide()
+        })
+      }
+      synchronize()
+    }
+
+    func synchronize() {
+      guard isPresented, let owner, owner.isVisible, !owner.isMiniaturized else {
+        hide()
+        return
+      }
+      let size = NSSize(width: 188, height: max(1, hosting.fittingSize.height))
+      let screen = owner.screen?.visibleFrame ?? owner.frame.insetBy(dx: -220, dy: -20)
+      panel.setFrame(SettingsPreviewPlacement.frame(owner: owner.frame, size: size, screen: screen), display: true)
+      panel.appearance = owner.effectiveAppearance
+      if panel.parent !== owner { owner.addChildWindow(panel, ordered: .above) }
+      if !panel.isVisible { panel.orderFront(nil) }
+    }
+
+    private func hide() {
+      panel.parent?.removeChildWindow(panel)
+      panel.orderOut(nil)
+    }
+
+    func detach() {
+      hide()
+      observations.forEach(NotificationCenter.default.removeObserver)
+      observations.removeAll()
+      owner = nil
+    }
+
+    deinit {
+      observations.forEach(NotificationCenter.default.removeObserver)
+    }
+  }
+}
+
+enum SettingsPreviewPlacement {
+  static func frame(owner: NSRect, size: NSSize, screen: NSRect) -> NSRect {
+    let gap: CGFloat = 12
+    let right = owner.maxX + gap
+    let left = owner.minX - gap - size.width
+    // Prefer the requested right side; use the left only at a screen edge.
+    let x = right + size.width <= screen.maxX ? right : max(screen.minX, left)
+    let y = max(screen.minY, min(owner.maxY - 52 - size.height, screen.maxY - size.height))
+    return NSRect(origin: NSPoint(x: x, y: y), size: size)
   }
 }

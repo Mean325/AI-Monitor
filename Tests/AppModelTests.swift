@@ -266,6 +266,36 @@ final class AppModelTests: XCTestCase {
     }
   }
 
+  func testSettingsPreviewSitsOutsideRightEdge() {
+    let owner = NSRect(x: 200, y: 100, width: 760, height: 660)
+    let screen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let frame = SettingsPreviewPlacement.frame(
+      owner: owner, size: NSSize(width: 188, height: 520), screen: screen)
+    XCTAssertEqual(frame.minX, owner.maxX + 12)
+    XCTAssertEqual(frame.maxY, owner.maxY - 52)
+    XCTAssertFalse(frame.intersects(owner))
+  }
+
+  func testSettingsPreviewRemainsVisibleNearScreenEdge() {
+    let owner = NSRect(x: 660, y: 100, width: 760, height: 660)
+    let screen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let frame = SettingsPreviewPlacement.frame(
+      owner: owner, size: NSSize(width: 188, height: 520), screen: screen)
+    XCTAssertEqual(frame.maxX, owner.minX - 12)
+    XCTAssertTrue(screen.contains(frame))
+    XCTAssertFalse(frame.intersects(owner))
+  }
+
+  func testSettingsPreviewSupportsDisplaysWithNegativeCoordinates() {
+    let screen = NSRect(x: -1440, y: -200, width: 1440, height: 900)
+    let owner = NSRect(x: -1300, y: -190, width: 760, height: 600)
+    let frame = SettingsPreviewPlacement.frame(
+      owner: owner, size: NSSize(width: 188, height: 580), screen: screen)
+    XCTAssertEqual(frame.minX, owner.maxX + 12)
+    XCTAssertEqual(frame.minY, screen.minY)
+    XCTAssertTrue(screen.contains(frame))
+  }
+
   @MainActor
   func testSettingsWindowPresenterRecognizesChineseAndEnglishTitles() {
     let chineseWindow = NSWindow()

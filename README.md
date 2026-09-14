@@ -18,7 +18,7 @@
 
 ## macOS 风格设置
 
-设置窗口按“状态监控、Linx68 推送、通用”组织，选中颜色会跟随 macOS 的系统强调色。窗口支持缩放，标题与内容可连续滚动。
+设置窗口按“状态监控、Linx68 推送、通用”组织，选中颜色会跟随 macOS 的系统强调色。窗口支持缩放、设置搜索与前进/返回导航。Linx68 键盘预览悬浮于设置窗口右侧，滚动配置时保持固定，并随设置窗口关闭。
 
 <p align="center">
   <img src="docs/images/settings-overview.png" width="880" alt="AI Monitor 设置窗口">
