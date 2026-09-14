@@ -14,6 +14,6 @@ enum AppBrand {
   }
 
   static var versionDescription: String {
-    "版本 \(version) (\(build))"
+    "版本 \(version)"
   }
 }

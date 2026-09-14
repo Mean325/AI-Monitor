@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0487D8E94B54E40F8FE0AA74 /* CodexActivityState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 495CC8E469ADC7965E6BAAD1 /* CodexActivityState.swift */; };
+		049F06321861D68E61EC0C9C /* BluetoothKeyboardInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5E2D2E26F7F1A4432D7781 /* BluetoothKeyboardInfoTests.swift */; };
 		07F588EBBB3668C9C0817B62 /* GrokActivityInterpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEB9B3BA1D773C7DEDA8D08 /* GrokActivityInterpreter.swift */; };
 		09FDC1B2E28A3FA5E6AE665B /* GrokUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C49CD533CF0F259DFF364FD /* GrokUsageClient.swift */; };
 		0BCA6DBF683A97C291E5A656 /* QoderCreditSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55F5F10B425C9524BED08F9A /* QoderCreditSnapshot.swift */; };
@@ -44,6 +45,7 @@
 		6CAE16DC3B98B0926F68B357 /* zh_CN.lproj in Resources */ = {isa = PBXBuildFile; fileRef = D50B5A671F9F66FB3DCDD241 /* zh_CN.lproj */; };
 		6F624A7F8B426038B367641D /* GrokCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78145063CFDF14686F4F63E6 /* GrokCardView.swift */; };
 		71E6AE685A47BDDA3B9EB3FC /* LocalNetworkAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95E16FB6870C57E47B8775A0 /* LocalNetworkAccess.swift */; };
+		72BE29CCC5B0E5B010830C6F /* BluetoothKeyboardInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0083C7AE0456C4A0E0476A /* BluetoothKeyboardInfo.swift */; };
 		7393B2E71423C7474703B39B /* QoderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21979514AAAC95FF50CD757 /* QoderCardView.swift */; };
 		7A8BD54862A6DAC76CC2F423 /* CodexActivityState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 495CC8E469ADC7965E6BAAD1 /* CodexActivityState.swift */; };
 		7D4754075467F197D99291CD /* UsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12DA604FF758ADCB6E850BC /* UsageCardView.swift */; };
@@ -125,10 +127,12 @@
 		B2F9102413779B09A2480346 /* BrandLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandLogoView.swift; sourceTree = "<group>"; };
 		B8F06F104E1BF95F00951024 /* ImageAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAPIClient.swift; sourceTree = "<group>"; };
 		BC162824EE74ABF8D2868960 /* UsageCardRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardRendererTests.swift; sourceTree = "<group>"; };
+		BD0083C7AE0456C4A0E0476A /* BluetoothKeyboardInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothKeyboardInfo.swift; sourceTree = "<group>"; };
 		C0E161EF3D5262E90F444877 /* QoderUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderUsageClientTests.swift; sourceTree = "<group>"; };
 		C5A75D8776677D666E7C841F /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		C814D7BD1845B7EA2DA66627 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		CA2772AEC9F5602218A73551 /* CodexHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexHookInstaller.swift; sourceTree = "<group>"; };
+		CB5E2D2E26F7F1A4432D7781 /* BluetoothKeyboardInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothKeyboardInfoTests.swift; sourceTree = "<group>"; };
 		CC0F7DCF6008E7248128F9C0 /* AppBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBrand.swift; sourceTree = "<group>"; };
 		D12DA604FF758ADCB6E850BC /* UsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardView.swift; sourceTree = "<group>"; };
 		D201F9235BAABFD77052C6F5 /* CodexRateLimitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexRateLimitClient.swift; sourceTree = "<group>"; };
@@ -156,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				7E3617FC33595887FB1EFE37 /* AppModelTests.swift */,
+				CB5E2D2E26F7F1A4432D7781 /* BluetoothKeyboardInfoTests.swift */,
 				DD77F5F5A7CA909D4083505E /* ClaudeCodeHookInstallerTests.swift */,
 				104FE28005328026A994385B /* ClaudeCodeUsageClientTests.swift */,
 				9923333557F59D96FE374FDB /* CodexActivityTests.swift */,
@@ -174,6 +179,7 @@
 				CC0F7DCF6008E7248128F9C0 /* AppBrand.swift */,
 				1508D6A6888DC3EDA401E663 /* AppGlassStyle.swift */,
 				C5A75D8776677D666E7C841F /* AppModel.swift */,
+				BD0083C7AE0456C4A0E0476A /* BluetoothKeyboardInfo.swift */,
 				B2F9102413779B09A2480346 /* BrandLogoView.swift */,
 				58B9450D53C09EFBDFEDEA74 /* ClaudeCodeHookInstaller.swift */,
 				DA4F2C152644D3DFFE9DC776 /* CodexActivityMonitor.swift */,
@@ -382,6 +388,7 @@
 				3B6F0E5105EB13FC091E3CD4 /* AppBrand.swift in Sources */,
 				C974B68FADD45DD67801E706 /* AppGlassStyle.swift in Sources */,
 				82FBC21E734E9AF253050637 /* AppModel.swift in Sources */,
+				72BE29CCC5B0E5B010830C6F /* BluetoothKeyboardInfo.swift in Sources */,
 				1C357C8663BF15875AEA180A /* BrandLogoView.swift in Sources */,
 				FAAEB2A9E008C3F01B47EF60 /* ClaudeCodeCardView.swift in Sources */,
 				48CDB087825F5CF4FDEEBAE9 /* ClaudeCodeHookInstaller.swift in Sources */,
@@ -421,6 +428,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F7F857AA7A8A07ADCF3737CE /* AppModelTests.swift in Sources */,
+				049F06321861D68E61EC0C9C /* BluetoothKeyboardInfoTests.swift in Sources */,
 				CE00CAFDC1C76192215C44A2 /* ClaudeCodeHookInstallerTests.swift in Sources */,
 				9D8B9F23FAE7BCD28E63D39B /* ClaudeCodeUsageClientTests.swift in Sources */,
 				3F0C2BDC9AEB52BD5B8D3174 /* CodexActivityTests.swift in Sources */,

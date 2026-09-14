@@ -75,6 +75,19 @@ enum UsageQueryState: Equatable {
   case failed
 }
 
+struct HTTPPushRequestRecord: Equatable, Sendable {
+  enum Outcome: Equatable, Sendable {
+    case pending
+    case succeeded(statusCode: Int, responseText: String)
+    case failed(statusCode: Int?, responseText: String?, message: String)
+  }
+
+  let endpoint: String
+  let startedAt: Date
+  let completedAt: Date?
+  let outcome: Outcome
+}
+
 @MainActor
 final class AppModel: ObservableObject {
   @Published private(set) var snapshot: UsageSnapshot?
@@ -102,6 +115,9 @@ final class AppModel: ObservableObject {
   @Published private(set) var qoderActivityState: CodexActivityState = .idle
   @Published private(set) var grokSnapshot: GrokUsageSnapshot?
   @Published private(set) var grokActivityState: CodexActivityState = .idle
+  @Published private(set) var isLinxEnabled: Bool
+  @Published private(set) var bluetoothKeyboardInfo: BluetoothKeyboardInfo?
+  @Published private(set) var lastPushRequest: HTTPPushRequestRecord?
 
   @Published var showTaskStatusInMenuBar: Bool {
     didSet {
@@ -205,6 +221,7 @@ final class AppModel: ObservableObject {
   private let localNetworkRetryWindowNanoseconds: UInt64
   private var didProbeLocalNetwork = false
   private var localNetworkRecoveryTask: Task<Void, Never>?
+  private var bluetoothRefreshTask: Task<Void, Never>?
 
   init(
     defaults: UserDefaults = .standard,
@@ -229,6 +246,7 @@ final class AppModel: ObservableObject {
     let resolvedQoderActivityMonitor = qoderActivityMonitor ?? QoderActivityMonitor()
     let resolvedGrokActivityMonitor = grokActivityMonitor ?? GrokActivityMonitor()
     self.defaults = defaults
+    isLinxEnabled = defaults.object(forKey: Keys.linxEnabled) as? Bool ?? true
     showTaskStatusInMenuBar = defaults.bool(forKey: "showTaskStatusInMenuBar")
     menuBarOriginalIconPosition = MenuBarOriginalIconPosition(
       rawValue: defaults.string(forKey: "menuBarOriginalIconPosition") ?? ""
@@ -254,6 +272,8 @@ final class AppModel: ObservableObject {
     claudeHookInstallationState = claudeHookInstaller.installationState()
     qoderActivityState = resolvedQoderActivityMonitor.state
     grokActivityState = resolvedGrokActivityMonitor.state
+    bluetoothKeyboardInfo = nil
+    lastPushRequest = nil
 
     endpoint = defaults.string(forKey: Keys.endpoint) ?? "http://192.168.31.71/image/upload"
     refreshIntervalSeconds = defaults.object(forKey: Keys.refreshInterval) as? Int ?? 300
@@ -310,6 +330,7 @@ final class AppModel: ObservableObject {
     qoderPendingActivityUploadTask?.cancel()
     grokPendingActivityUploadTask?.cancel()
     localNetworkRecoveryTask?.cancel()
+    bluetoothRefreshTask?.cancel()
     if let wakeObserver {
       NotificationCenter.default.removeObserver(wakeObserver)
     }
@@ -355,6 +376,7 @@ final class AppModel: ObservableObject {
     grokActivityState = grokActivityMonitor.state
     activateSelectedMonitor()
     updatePreview()
+    startBluetoothKeyboardMonitoring()
 
     wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.didWakeNotification,
@@ -363,6 +385,7 @@ final class AppModel: ObservableObject {
     ) { [weak self] _ in
       Task { @MainActor in
         guard let self else { return }
+        guard self.isLinxEnabled else { return }
         if self.isUsageMode {
           await self.synchronize(upload: true, forceUpload: true)
         } else {
@@ -377,6 +400,7 @@ final class AppModel: ObservableObject {
   private func beginSyncAfterLaunchIfNeeded() {
     let begin = { [weak self] in
       guard let self else { return }
+      guard self.isLinxEnabled else { return }
       if self.isUsageMode {
         self.usageQueryState = .querying
         self.statusText = "正在同步并推送…"
@@ -413,8 +437,57 @@ final class AppModel: ObservableObject {
     guard refreshIntervalSeconds != seconds else { return }
     refreshIntervalSeconds = seconds
     defaults.set(seconds, forKey: Keys.refreshInterval)
-    if isUsageMode {
+    if isLinxEnabled, isUsageMode {
       restartScheduler(uploadImmediately: false)
+    }
+  }
+
+  func setLinxEnabled(_ enabled: Bool) {
+    guard isLinxEnabled != enabled else { return }
+    isLinxEnabled = enabled
+    defaults.set(enabled, forKey: Keys.linxEnabled)
+
+    if enabled {
+      keyboardConnectionState = .disconnected
+      lastUploadedHash = nil
+      if hasStarted {
+        scheduleCurrentModeAction()
+      }
+      return
+    }
+
+    schedulerTask?.cancel()
+    schedulerTask = nil
+    pendingModeActionTask?.cancel()
+    pendingActivityUploadTask?.cancel()
+    claudePendingActivityUploadTask?.cancel()
+    qoderPendingActivityUploadTask?.cancel()
+    grokPendingActivityUploadTask?.cancel()
+    localNetworkRecoveryTask?.cancel()
+    keyboardConnectionState = .disconnected
+    usageQueryState = .idle
+    statusText = "Linx68 已关闭"
+    lastError = nil
+  }
+
+  func refreshBluetoothKeyboardInfo() {
+    Task { [weak self] in
+      let info = await BluetoothKeyboardInfoReader.fetch()
+      guard !Task.isCancelled else { return }
+      self?.bluetoothKeyboardInfo = info
+    }
+  }
+
+  private func startBluetoothKeyboardMonitoring() {
+    guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+    bluetoothRefreshTask?.cancel()
+    bluetoothRefreshTask = Task { [weak self] in
+      while !Task.isCancelled {
+        let info = await BluetoothKeyboardInfoReader.fetch()
+        guard !Task.isCancelled, let self else { return }
+        self.bluetoothKeyboardInfo = info
+        try? await Task.sleep(nanoseconds: 30_000_000_000)
+      }
     }
   }
 
@@ -458,7 +531,7 @@ final class AppModel: ObservableObject {
       statusText = "准备读取 Grok 余量"
     }
 
-    if hasStarted {
+    if hasStarted, isLinxEnabled {
       scheduleCurrentModeAction()
     }
   }
@@ -503,7 +576,7 @@ final class AppModel: ObservableObject {
     lastUploadedHash = nil
     updatePreview()
 
-    if hasStarted, isUsageMode {
+    if hasStarted, isLinxEnabled, isUsageMode {
       scheduleCurrentModeAction()
     }
   }
@@ -516,7 +589,7 @@ final class AppModel: ObservableObject {
     lastUploadedHash = nil
     updatePreview()
 
-    if hasStarted, isUsageMode {
+    if hasStarted, isLinxEnabled, isUsageMode {
       scheduleCurrentModeAction()
     }
   }
@@ -547,13 +620,14 @@ final class AppModel: ObservableObject {
       lastUploadedHash = nil
       updatePreview()
       statusText = "图片已准备"
-      if hasStarted {
+      if hasStarted, isLinxEnabled {
         scheduleCurrentModeAction()
       }
     }
   }
 
   func refreshOnly() {
+    guard isLinxEnabled else { return }
     guard isUsageMode else {
       statusText = "图片模式下用量刷新已暂停"
       return
@@ -562,6 +636,7 @@ final class AppModel: ObservableObject {
   }
 
   func pushNow() {
+    guard isLinxEnabled else { return }
     if isUsageMode {
       Task { await synchronize(upload: true, forceUpload: true) }
     } else {
@@ -662,7 +737,7 @@ final class AppModel: ObservableObject {
   }
 
   func synchronize(upload: Bool, forceUpload: Bool) async {
-    guard isUsageMode, !isSyncing else { return }
+    guard isLinxEnabled, isUsageMode, !isSyncing else { return }
     isSyncing = true
     var didStartUpload = false
     var connectionStateBeforeUpload: KeyboardConnectionState?
@@ -768,6 +843,8 @@ final class AppModel: ObservableObject {
         return
       }
 
+      guard isLinxEnabled else { return }
+
       let hash = SHA256.hash(data: rendered.data).map { String(format: "%02x", $0) }.joined()
       if !forceUpload, hash == lastUploadedHash {
         statusText = "数据未变化"
@@ -784,6 +861,7 @@ final class AppModel: ObservableObject {
       lastError = nil
       statusText = "推送成功 · HTTP \(result.statusCode)"
     } catch {
+      guard isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -805,7 +883,7 @@ final class AppModel: ObservableObject {
   }
 
   func uploadCustomImage(forceUpload: Bool) async {
-    guard displayMode == .customImage, !isSyncing else { return }
+    guard isLinxEnabled, displayMode == .customImage, !isSyncing else { return }
     guard let customSourceImage else {
       lastError = "请先选择要显示的图片。"
       statusText = "尚未选择图片"
@@ -833,7 +911,7 @@ final class AppModel: ObservableObject {
         return
       }
 
-      guard displayMode == .customImage else { return }
+      guard isLinxEnabled, displayMode == .customImage else { return }
       connectionStateBeforeUpload = keyboardConnectionState
       didStartUpload = true
       let uploadEndpoint = endpoint
@@ -844,6 +922,7 @@ final class AppModel: ObservableObject {
       lastUploadDate = Date()
       statusText = "图片推送成功 · HTTP \(result.statusCode)"
     } catch {
+      guard isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -897,7 +976,7 @@ final class AppModel: ObservableObject {
     guard codexActivityState != resolved else { return }
     codexActivityState = resolved
     updatePreview()
-    guard uploadIfChanged, hasStarted, displayMode == .codex else { return }
+    guard uploadIfChanged, hasStarted, isLinxEnabled, displayMode == .codex else { return }
     scheduleCodexActivityUpload()
   }
 
@@ -922,13 +1001,13 @@ final class AppModel: ObservableObject {
           return
         }
       }
-      guard !Task.isCancelled, self.displayMode == .codex else { return }
+      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == .codex else { return }
       await self.uploadCurrentCodexActivityCard()
     }
   }
 
   private func uploadCurrentCodexActivityCard() async {
-    guard displayMode == .codex, !isSyncing else { return }
+    guard isLinxEnabled, displayMode == .codex, !isSyncing else { return }
     isSyncing = true
     var didStartUpload = false
     var connectionStateBeforeUpload: KeyboardConnectionState?
@@ -958,6 +1037,7 @@ final class AppModel: ObservableObject {
       lastError = nil
       statusText = "\(codexActivityState.title) · HTTP \(result.statusCode)"
     } catch {
+      guard isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -974,7 +1054,7 @@ final class AppModel: ObservableObject {
     claudeActivityState = state
     updatePreview()
 
-    guard hasStarted, displayMode == .claudeCode else { return }
+    guard hasStarted, isLinxEnabled, displayMode == .claudeCode else { return }
     scheduleClaudeActivityUpload()
   }
 
@@ -983,7 +1063,7 @@ final class AppModel: ObservableObject {
     qoderActivityState = state
     updatePreview()
 
-    guard hasStarted, displayMode == .qoder else { return }
+    guard hasStarted, isLinxEnabled, displayMode == .qoder else { return }
     scheduleQoderActivityUpload()
   }
 
@@ -992,7 +1072,7 @@ final class AppModel: ObservableObject {
     grokActivityState = state
     updatePreview()
 
-    guard hasStarted, displayMode == .grok else { return }
+    guard hasStarted, isLinxEnabled, displayMode == .grok else { return }
     scheduleGrokActivityUpload()
   }
 
@@ -1007,13 +1087,13 @@ final class AppModel: ObservableObject {
           return
         }
       }
-      guard !Task.isCancelled, self.displayMode == .grok else { return }
+      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == .grok else { return }
       await self.uploadCurrentGrokActivityCard()
     }
   }
 
   private func uploadCurrentGrokActivityCard() async {
-    guard displayMode == .grok, !isSyncing else { return }
+    guard isLinxEnabled, displayMode == .grok, !isSyncing else { return }
     isSyncing = true
     var didStartUpload = false
     var connectionStateBeforeUpload: KeyboardConnectionState?
@@ -1043,6 +1123,7 @@ final class AppModel: ObservableObject {
       lastError = nil
       statusText = "\(grokActivityState.title) · HTTP \(result.statusCode)"
     } catch {
+      guard isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -1065,13 +1146,13 @@ final class AppModel: ObservableObject {
           return
         }
       }
-      guard !Task.isCancelled, self.displayMode == .qoder else { return }
+      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == .qoder else { return }
       await self.uploadCurrentQoderActivityCard()
     }
   }
 
   private func uploadCurrentQoderActivityCard() async {
-    guard displayMode == .qoder, !isSyncing else { return }
+    guard isLinxEnabled, displayMode == .qoder, !isSyncing else { return }
     isSyncing = true
     var didStartUpload = false
     var connectionStateBeforeUpload: KeyboardConnectionState?
@@ -1102,6 +1183,7 @@ final class AppModel: ObservableObject {
       lastError = nil
       statusText = "\(qoderActivityState.title) · HTTP \(result.statusCode)"
     } catch {
+      guard isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -1134,13 +1216,13 @@ final class AppModel: ObservableObject {
           return
         }
       }
-      guard !Task.isCancelled, self.displayMode == .claudeCode else { return }
+      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == .claudeCode else { return }
       await self.uploadCurrentClaudeActivityCard()
     }
   }
 
   private func uploadCurrentClaudeActivityCard() async {
-    guard displayMode == .claudeCode, !isSyncing else { return }
+    guard isLinxEnabled, displayMode == .claudeCode, !isSyncing else { return }
     isSyncing = true
     var didStartUpload = false
     var connectionStateBeforeUpload: KeyboardConnectionState?
@@ -1170,6 +1252,7 @@ final class AppModel: ObservableObject {
       lastError = nil
       statusText = "\(claudeActivityState.title) · HTTP \(result.statusCode)"
     } catch {
+      guard isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -1182,6 +1265,49 @@ final class AppModel: ObservableObject {
   }
 
   private func pushJPEG(_ data: Data, endpoint uploadEndpoint: String) async throws -> ImageUploadResult {
+    let startedAt = Date()
+    lastPushRequest = HTTPPushRequestRecord(
+      endpoint: uploadEndpoint,
+      startedAt: startedAt,
+      completedAt: nil,
+      outcome: .pending
+    )
+
+    do {
+      let result = try await performPushJPEG(data, endpoint: uploadEndpoint)
+      lastPushRequest = HTTPPushRequestRecord(
+        endpoint: uploadEndpoint,
+        startedAt: startedAt,
+        completedAt: Date(),
+        outcome: .succeeded(statusCode: result.statusCode, responseText: result.responseText)
+      )
+      return result
+    } catch {
+      let statusCode: Int?
+      let responseText: String?
+      if case let ImageAPIError.rejected(code, response) = error {
+        statusCode = code
+        responseText = response
+      } else {
+        statusCode = nil
+        responseText = nil
+      }
+      let message = error is CancellationError ? "请求已取消" : error.localizedDescription
+      lastPushRequest = HTTPPushRequestRecord(
+        endpoint: uploadEndpoint,
+        startedAt: startedAt,
+        completedAt: Date(),
+        outcome: .failed(statusCode: statusCode, responseText: responseText, message: message)
+      )
+      throw error
+    }
+  }
+
+  private func performPushJPEG(
+    _ data: Data,
+    endpoint uploadEndpoint: String
+  ) async throws -> ImageUploadResult {
+    guard isLinxEnabled else { throw CancellationError() }
     let isFirstLocalNetworkUse = !didProbeLocalNetwork
     if isFirstLocalNetworkUse {
       await LocalNetworkAccess.preflight(endpoint: uploadEndpoint)
@@ -1201,6 +1327,7 @@ final class AppModel: ObservableObject {
 
       do {
         let result = try await imageAPIClient.upload(data, endpoint: uploadEndpoint)
+        guard isLinxEnabled else { throw CancellationError() }
         localNetworkRecoveryTask?.cancel()
         localNetworkRecoveryTask = nil
         return result
@@ -1226,7 +1353,7 @@ final class AppModel: ObservableObject {
     localNetworkRecoveryTask?.cancel()
     localNetworkRecoveryTask = Task { [weak self] in
       try? await Task.sleep(nanoseconds: 8_000_000_000)
-      guard !Task.isCancelled, let self else { return }
+      guard !Task.isCancelled, let self, self.isLinxEnabled else { return }
       guard self.lastUploadDate == nil else { return }
       if self.isUsageMode {
         await self.synchronize(upload: true, forceUpload: true)
@@ -1238,7 +1365,7 @@ final class AppModel: ObservableObject {
 
   private func restartScheduler(uploadImmediately: Bool) {
     schedulerTask?.cancel()
-    guard isUsageMode else {
+    guard isLinxEnabled, isUsageMode else {
       schedulerTask = nil
       return
     }
@@ -1252,7 +1379,7 @@ final class AppModel: ObservableObject {
       while !Task.isCancelled {
         let interval = self.refreshIntervalSeconds
         try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
-        guard !Task.isCancelled, self.isUsageMode else { return }
+        guard !Task.isCancelled, self.isLinxEnabled, self.isUsageMode else { return }
         await self.synchronize(upload: true, forceUpload: false)
       }
     }
@@ -1315,6 +1442,7 @@ final class AppModel: ObservableObject {
   }
 
   private func scheduleCurrentModeAction() {
+    guard isLinxEnabled else { return }
     pendingModeActionTask?.cancel()
     let expectedMode = displayMode
 
@@ -1327,7 +1455,7 @@ final class AppModel: ObservableObject {
           return
         }
       }
-      guard !Task.isCancelled, self.displayMode == expectedMode else { return }
+      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == expectedMode else { return }
 
       if expectedMode == .customImage {
         await self.uploadCustomImage(forceUpload: true)
@@ -1359,6 +1487,7 @@ final class AppModel: ObservableObject {
   }
 
   private enum Keys {
+    static let linxEnabled = "linxEnabled"
     static let endpoint = "imageAPIEndpoint"
     static let refreshInterval = "refreshIntervalSeconds"
     static let safeAreaHeight = "safeAreaHeight"

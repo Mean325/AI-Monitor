@@ -27,6 +27,40 @@ final class AppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testLinxMasterSwitchPersistsAndControlsStartupSync() async throws {
+    let suite = "LinxMasterSwitchTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let codexClient = FakeCodexClient()
+    let imageClient = FakeImageClient()
+    let model = AppModel(
+      defaults: defaults,
+      codexClient: codexClient,
+      imageAPIClient: imageClient
+    )
+
+    XCTAssertTrue(model.isLinxEnabled)
+    model.setLinxEnabled(false)
+    XCTAssertFalse(AppModel(defaults: defaults).isLinxEnabled)
+
+    model.start()
+    try await Task.sleep(nanoseconds: 100_000_000)
+    let disabledFetchCount = await codexClient.fetchCount
+    let disabledUploadCount = await imageClient.uploadCount
+    XCTAssertEqual(disabledFetchCount, 0)
+    XCTAssertEqual(disabledUploadCount, 0)
+
+    model.setLinxEnabled(true)
+    let syncCompleted = await waitUntil {
+      let fetchCount = await codexClient.fetchCount
+      let uploadCount = await imageClient.uploadCount
+      return fetchCount == 1 && uploadCount == 1
+    }
+    XCTAssertTrue(syncCompleted)
+    XCTAssertTrue(AppModel(defaults: defaults).isLinxEnabled)
+  }
+
+  @MainActor
   func testOnlySelectedAIMonitorRuns() throws {
     let suite = "SelectedMonitorTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -540,6 +574,34 @@ final class AppModelTests: XCTestCase {
 
     XCTAssertEqual(model.keyboardConnectionState, .pushFailed)
     XCTAssertEqual(MenuBarIconAppearance.logoOpacity(for: .pushFailed), 0.5)
+    let request = try XCTUnwrap(model.lastPushRequest)
+    XCTAssertEqual(request.endpoint, model.endpoint)
+    XCTAssertNotNil(request.completedAt)
+    XCTAssertEqual(
+      request.outcome,
+      .failed(statusCode: 500, responseText: "测试推送失败", message: "图像 API 返回 HTTP 500：测试推送失败")
+    )
+  }
+
+  @MainActor
+  func testSuccessfulPushStoresHTTPResponseDetails() async throws {
+    let suiteName = "AppModelTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let model = AppModel(
+      defaults: defaults,
+      codexClient: FakeCodexClient(),
+      imageAPIClient: FakeImageClient()
+    )
+
+    await model.synchronize(upload: true, forceUpload: true)
+
+    let request = try XCTUnwrap(model.lastPushRequest)
+    XCTAssertEqual(request.endpoint, model.endpoint)
+    XCTAssertNotNil(request.completedAt)
+    XCTAssertEqual(request.outcome, .succeeded(statusCode: 200, responseText: "OK"))
   }
 
   @MainActor

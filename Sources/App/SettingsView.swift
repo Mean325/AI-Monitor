@@ -16,6 +16,7 @@ struct SettingsView: View {
   @State private var selectedPane: SettingsPane = .monitoring
   @State private var selectedLinxPane = 0
   @State private var hoveringWindowControls = false
+  @State private var showingPushRequestDetails = false
 
   private let intervals = [10, 30, 60, 300, 600, 1_800]
   private let brandAccent = Color(red: 62 / 255, green: 207 / 255, blue: 181 / 255)
@@ -46,6 +47,7 @@ struct SettingsView: View {
 
         VStack(spacing: 0) {
           detailBody
+            .padding(.top, 28)
         }
       }
     }
@@ -61,6 +63,9 @@ struct SettingsView: View {
     .background(detailCanvasBackground)
     .background(SettingsWindowConfigurator())
     .ignoresSafeArea(.container, edges: .top)
+    .sheet(isPresented: $showingPushRequestDetails) {
+      pushRequestDetails
+    }
   }
 
   private var activePane: SettingsPane {
@@ -221,25 +226,183 @@ struct SettingsView: View {
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
-  private var keyboardStatusBadge: some View {
-    glassSurface(tint: connectionColor) {
-      HStack(spacing: 9) {
-        Circle()
-          .fill(connectionColor)
-          .frame(width: 8, height: 8)
-          .shadow(color: connectionColor.opacity(0.45), radius: 4)
+  private var keyboardStatusPanel: some View {
+    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
-        VStack(alignment: .leading, spacing: 1) {
-          Text(connectionTitle)
-            .font(.caption.weight(.semibold))
-          Text("键盘状态")
-            .font(.caption2)
+    return keyboardStatusContent
+      .background(Color.primary.opacity(0.025), in: shape)
+      .overlay { shape.stroke(Color.primary.opacity(0.08), lineWidth: 1) }
+  }
+
+  private var keyboardStatusContent: some View {
+    VStack(spacing: 10) {
+      statusRow(
+        title: "设备名称",
+        value: model.bluetoothKeyboardInfo?.name ?? "未发现 Linx68",
+        valueColor: bluetoothConnectionColor
+      )
+
+      Divider().opacity(0.5)
+      statusRow(
+        title: "蓝牙状态",
+        value: model.bluetoothKeyboardInfo?.isConnected == true ? "已连接" : "未连接",
+        valueColor: bluetoothConnectionColor
+      )
+
+      Divider().opacity(0.5)
+      statusRow(title: "电量", value: bluetoothBatteryText)
+
+      if let address = model.bluetoothKeyboardInfo?.address {
+        Divider().opacity(0.5)
+        statusRow(title: "设备地址", value: address)
+      }
+
+      if model.bluetoothKeyboardInfo?.isConnected != true {
+        Divider().opacity(0.5)
+        Button {
+          openBluetoothSettings()
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "gear")
+            Text("点击打开蓝牙设置并配对设备")
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+          }
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .font(.caption)
+        .foregroundStyle(systemAccent)
+        .help("打开系统蓝牙设置")
+      }
+
+      Divider().opacity(0.5)
+
+      Button {
+        showingPushRequestDetails = true
+      } label: {
+        HStack(spacing: 8) {
+          Text("屏幕推送")
+            .foregroundStyle(.secondary)
+          Spacer(minLength: 12)
+          Text(lastPushSummary)
+            .foregroundStyle(lastPushColor)
+            .lineLimit(1)
+          Image(systemName: "chevron.right")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.tertiary)
+        }
+        .font(.callout)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help("查看最近一次 HTTP 请求详情")
+    }
+    .padding(12)
+    .frame(maxWidth: .infinity)
+    .onAppear {
+      model.refreshBluetoothKeyboardInfo()
+    }
+  }
+
+  private var pushRequestDetails: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      HStack(spacing: 10) {
+        Image(systemName: lastPushSymbol)
+          .font(.title2)
+          .foregroundStyle(lastPushColor)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("屏幕推送详情")
+            .font(.headline)
+          Text(lastPushSummary)
+            .font(.caption)
             .foregroundStyle(.secondary)
         }
+        Spacer()
       }
-      .padding(11)
+
+      Divider()
+
+      if let request = model.lastPushRequest {
+        VStack(spacing: 10) {
+          statusRow(title: "请求方法", value: "POST")
+          Divider().opacity(0.5)
+          statusRow(title: "内容类型", value: "image/jpeg")
+          Divider().opacity(0.5)
+          detailTextRow(title: "请求地址", value: request.endpoint)
+          Divider().opacity(0.5)
+          statusRow(title: "开始时间", value: pushDateText(request.startedAt))
+
+          if let completedAt = request.completedAt {
+            Divider().opacity(0.5)
+            statusRow(title: "完成时间", value: pushDateText(completedAt))
+          }
+
+          switch request.outcome {
+          case .pending:
+            Divider().opacity(0.5)
+            statusRow(title: "请求状态", value: "请求中", valueColor: .blue)
+          case .succeeded(let statusCode, let responseText):
+            Divider().opacity(0.5)
+            statusRow(title: "HTTP 状态", value: String(statusCode), valueColor: brandAccent)
+            if !responseText.isEmpty {
+              Divider().opacity(0.5)
+              detailTextRow(title: "响应内容", value: responseText)
+            }
+          case .failed(let statusCode, let responseText, let message):
+            Divider().opacity(0.5)
+            statusRow(
+              title: "HTTP 状态",
+              value: statusCode.map(String.init) ?? "未收到响应",
+              valueColor: .red
+            )
+            Divider().opacity(0.5)
+            detailTextRow(title: "错误信息", value: message, color: .red)
+            if let responseText, !responseText.isEmpty {
+              Divider().opacity(0.5)
+              detailTextRow(title: "响应内容", value: responseText)
+            }
+          }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+          RoundedRectangle(cornerRadius: 12)
+            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+      } else {
+        ContentUnavailableView(
+          "尚无推送记录",
+          systemImage: "arrow.up.doc",
+          description: Text("完成一次屏幕推送后，这里会显示 HTTP 请求详情。")
+        )
+        .frame(maxWidth: .infinity, minHeight: 180)
+      }
+
+      HStack {
+        Spacer()
+        Button("完成") {
+          showingPushRequestDetails = false
+        }
+        .keyboardShortcut(.defaultAction)
+      }
     }
-    .fixedSize(horizontal: true, vertical: false)
+    .padding(20)
+    .frame(width: 480)
+  }
+
+  private func detailTextRow(title: String, value: String, color: Color = .primary) -> some View {
+    VStack(alignment: .leading, spacing: 5) {
+      Text(title)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      Text(value)
+        .font(.system(.callout, design: .monospaced))
+        .foregroundStyle(color)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
   }
 
   private var detailHeader: some View {
@@ -270,10 +433,6 @@ struct SettingsView: View {
       }
       .frame(maxWidth: .infinity)
 
-      if activePane == .linx {
-        keyboardStatusBadge
-          .padding(.top, 2)
-      }
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 28)
@@ -302,17 +461,35 @@ struct SettingsView: View {
 
   private var linxPane: some View {
     VStack(spacing: 12) {
-      Picker("Linx68 推送配置", selection: $selectedLinxPane) {
-        Text("显示与预览").tag(0)
-        Text("连接与同步").tag(1)
+      linxMasterControl
+
+      if model.isLinxEnabled {
+        Picker("Linx68 推送配置", selection: $selectedLinxPane) {
+          Text("显示与预览").tag(0)
+          Text("连接与同步").tag(1)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+
+        if selectedLinxPane == 0 {
+          displayPane
+        } else {
+          connectionPane
+        }
       }
-      .pickerStyle(.segmented)
-      .labelsHidden()
-      if selectedLinxPane == 0 {
-        displayPane
-      } else {
-        connectionPane
-      }
+    }
+    .animation(sidebarSelectionAnimation, value: model.isLinxEnabled)
+  }
+
+  private var linxMasterControl: some View {
+    settingsCard(
+      title: "Linx68",
+      subtitle: model.isLinxEnabled ? "已开启自动同步与键盘推送" : "已暂停所有同步与推送",
+      symbol: "keyboard",
+      tint: brandAccent,
+      showLinxToggle: true
+    ) {
+      keyboardStatusPanel
     }
   }
 
@@ -1031,6 +1208,7 @@ struct SettingsView: View {
     subtitle: String,
     symbol: String,
     tint: Color,
+    showLinxToggle: Bool = false,
     showPushAction: Bool = false,
     @ViewBuilder content: () -> Content
   ) -> some View {
@@ -1056,7 +1234,19 @@ struct SettingsView: View {
         }
 
         Spacer(minLength: 0)
-        if showPushAction {
+        if showLinxToggle {
+          Toggle(
+            "启用 Linx68",
+            isOn: Binding(
+              get: { model.isLinxEnabled },
+              set: { model.setLinxEnabled($0) }
+            )
+          )
+          .labelsHidden()
+          .toggleStyle(.switch)
+          .tint(brandAccent)
+          .accessibilityLabel("启用 Linx68")
+        } else if showPushAction {
           prominentGlassButton {
             model.pushNow()
           } label: {
@@ -1389,12 +1579,59 @@ struct SettingsView: View {
       .modifier(AppGlassButton(prominent: true))
   }
 
-  private var connectionTitle: String {
-    switch model.keyboardConnectionState {
-    case .disconnected: return "键盘未连接"
-    case .connected: return "键盘已连接"
-    case .pushFailed: return "推送失败"
+  private var lastPushSummary: String {
+    guard let request = model.lastPushRequest else { return "尚无推送记录" }
+    switch request.outcome {
+    case .pending:
+      return "正在请求…"
+    case .succeeded(let statusCode, _):
+      return "成功 · HTTP \(statusCode)"
+    case .failed(let statusCode, _, _):
+      return statusCode.map { "失败 · HTTP \($0)" } ?? "请求失败"
     }
+  }
+
+  private var lastPushSymbol: String {
+    guard let request = model.lastPushRequest else { return "minus.circle" }
+    switch request.outcome {
+    case .pending: return "clock.arrow.circlepath"
+    case .succeeded: return "checkmark.circle.fill"
+    case .failed: return "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var lastPushColor: Color {
+    guard let request = model.lastPushRequest else { return .secondary }
+    switch request.outcome {
+    case .pending: return .blue
+    case .succeeded: return brandAccent
+    case .failed: return .red
+    }
+  }
+
+  private func pushDateText(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = .current
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .medium
+    return formatter.string(from: date)
+  }
+
+  private var bluetoothConnectionColor: Color {
+    model.bluetoothKeyboardInfo?.isConnected == true ? brandAccent : .secondary
+  }
+
+  private var bluetoothBatteryText: String {
+    guard model.bluetoothKeyboardInfo?.isConnected == true else { return "--" }
+    guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return "不可用" }
+    return "\(battery)%"
+  }
+
+  private func openBluetoothSettings() {
+    guard let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") else {
+      return
+    }
+    NSWorkspace.shared.open(url)
   }
 
   private var previewDescription: String {

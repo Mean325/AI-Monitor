@@ -14,41 +14,59 @@ struct MenuBarContentView: View {
       sectionLabel("用量概览", systemImage: "chart.bar.xaxis")
       usageSummary
 
-      sectionLabel("同步状态", systemImage: "arrow.triangle.2.circlepath")
-      VStack(alignment: .leading, spacing: 5) {
-        Label(
-          model.statusText,
-          systemImage: model.lastError == nil ? "checkmark.circle" : "exclamationmark.triangle"
-        )
-        .foregroundStyle(model.lastError == nil ? Color.secondary : Color.orange)
+      if model.isLinxEnabled {
+        sectionLabel("同步状态", systemImage: "arrow.triangle.2.circlepath")
 
-        Text("上次推送：\(model.lastUploadText)")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+          HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+              HStack(spacing: 6) {
+                Text(model.bluetoothKeyboardInfo?.name ?? "Linx68")
+                  .font(.caption.weight(.semibold))
+                  .lineLimit(1)
 
-        if let error = model.lastError {
-          Text(error)
-            .font(.caption)
-            .foregroundStyle(.red)
-            .fixedSize(horizontal: false, vertical: true)
-        }
+                if model.bluetoothKeyboardInfo?.isConnected == true {
+                  Image(systemName: batterySymbol)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(batteryColor)
+                    .accessibilityLabel(batteryAccessibilityText)
+                }
+              }
+              Text(keyboardDetailText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
 
-        HStack {
-          Spacer()
+            Spacer(minLength: 8)
 
-          Button(primarySyncActionTitle) {
-            performPrimarySyncAction()
+            Image(systemName: pushStatusSymbol)
+              .font(.system(size: 19, weight: .bold))
+              .symbolRenderingMode(.hierarchical)
+              .foregroundStyle(pushStatusColor)
+              .accessibilityLabel(pushStatusAccessibilityText)
           }
-          .buttonStyle(.plain)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(systemAccent)
-          .disabled(model.isSyncing)
+
+          HStack {
+            Text(pushTimeText)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button(primarySyncActionTitle) {
+              performPrimarySyncAction()
+            }
+            .buttonStyle(.plain)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(systemAccent)
+            .disabled(model.isSyncing)
+          }
         }
+        .font(.caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .modifier(AppGlassPanel(tint: .clear, radius: 14))
       }
-      .font(.caption)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(12)
-      .modifier(AppGlassPanel(tint: model.lastError == nil ? systemAccent : .orange, radius: 14))
 
       Divider()
 
@@ -71,7 +89,6 @@ struct MenuBarContentView: View {
     }
     .padding(16)
     .frame(width: 320)
-    .modifier(AppGlassPanel(tint: .clear, radius: 24))
   }
 
   private func sectionLabel(_ title: String, systemImage: String) -> some View {
@@ -84,6 +101,72 @@ struct MenuBarContentView: View {
 
   private var primarySyncActionTitle: String {
     model.displayMode == .customImage ? "选择图片" : "刷新并推送"
+  }
+
+  private var keyboardDetailText: String {
+    guard let keyboard = model.bluetoothKeyboardInfo else { return "蓝牙未连接" }
+    guard keyboard.isConnected else { return "蓝牙未连接" }
+    return "蓝牙已连接"
+  }
+
+  private var batterySymbol: String {
+    guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else {
+      return "battery.0percent"
+    }
+    switch battery {
+    case 76...: return "battery.100percent"
+    case 51...: return "battery.75percent"
+    case 26...: return "battery.50percent"
+    case 11...: return "battery.25percent"
+    default: return "battery.0percent"
+    }
+  }
+
+  private var batteryColor: Color {
+    guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return .secondary }
+    if battery <= 10 { return .red }
+    if battery <= 20 { return .orange }
+    return .green
+  }
+
+  private var batteryAccessibilityText: String {
+    guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return "电量不可用" }
+    return "电量 \(battery)%"
+  }
+
+  private var pushTimeText: String {
+    guard let date = model.lastPushRequest?.startedAt else { return "尚无推送" }
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MM/dd HH:mm:ss"
+    return "推送于 " + formatter.string(from: date)
+  }
+
+  private var pushStatusSymbol: String {
+    guard let request = model.lastPushRequest else { return "minus.circle" }
+    switch request.outcome {
+    case .pending: return "clock.arrow.circlepath"
+    case .succeeded: return "checkmark.circle.fill"
+    case .failed: return "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var pushStatusColor: Color {
+    guard let request = model.lastPushRequest else { return .secondary }
+    switch request.outcome {
+    case .pending: return .blue
+    case .succeeded: return .green
+    case .failed: return .red
+    }
+  }
+
+  private var pushStatusAccessibilityText: String {
+    guard let request = model.lastPushRequest else { return "尚无推送" }
+    switch request.outcome {
+    case .pending: return "正在推送"
+    case .succeeded(let statusCode, _): return "推送成功，HTTP \(statusCode)"
+    case .failed(let statusCode, _, _):
+      return statusCode.map { "推送失败，HTTP \($0)" } ?? "推送失败"
+    }
   }
 
   private func performPrimarySyncAction() {
@@ -108,7 +191,7 @@ struct MenuBarContentView: View {
 
       Spacer()
 
-      if model.isSyncing {
+      if model.isLinxEnabled, model.isSyncing {
         ProgressView()
           .controlSize(.small)
       }
