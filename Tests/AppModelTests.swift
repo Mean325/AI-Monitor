@@ -157,35 +157,35 @@ final class AppModelTests: XCTestCase {
       let image = MenuBarStatusIcon.makeCombinedImage(connectionState: .connected,
         displayMode: .codex, showTaskStatus: true, activityState: .idle,
         iconPosition: position)
-      let width: CGFloat = position == .hidden ? 60 : 90
+      let width: CGFloat = position == .hidden ? 60 : 94
       XCTAssertEqual(image.size.width, width)
       XCTAssertFalse(image.isTemplate)
       let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(image.tiffRepresentation)))
-      let center: CGFloat = position == .left ? 82 : 52
+      let center: CGFloat = position == .left ? 86 : 52
       let x = Int(center * CGFloat(bitmap.pixelsWide) / width)
       let color = try XCTUnwrap(bitmap.colorAt(x: x, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB))
       XCTAssertGreaterThan(color.greenComponent, color.redComponent)
       let disabled = MenuBarStatusIcon.makeCombinedImage(connectionState: .connected,
         displayMode: .codex, showTaskStatus: false, activityState: .idle,
         iconPosition: position)
-      XCTAssertEqual(disabled.size.width, 18)
-      XCTAssertTrue(disabled.isTemplate)
+      XCTAssertEqual(disabled.size.width, 22)
+      XCTAssertFalse(disabled.isTemplate)
     }
   }
 
   func testMenuBarImageIncludesColoredLightsWhenEnabled() throws {
     let disabled = MenuBarStatusIcon.makeCombinedImage(connectionState: .connected,
       displayMode: .codex, showTaskStatus: false, activityState: .idle)
-    XCTAssertEqual(disabled.size.width, 18)
-    XCTAssertTrue(disabled.isTemplate)
+    XCTAssertEqual(disabled.size.width, 22)
+    XCTAssertFalse(disabled.isTemplate)
     for state in [CodexActivityState.idle, .running, .toolFailed] {
       let image = MenuBarStatusIcon.makeCombinedImage(connectionState: .disconnected,
         displayMode: .codex, showTaskStatus: true, activityState: state)
-      XCTAssertEqual(image.size.width, 90)
+      XCTAssertEqual(image.size.width, 94)
       XCTAssertFalse(image.isTemplate)
       let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(image.tiffRepresentation)))
       let index = try XCTUnwrap(TaskTrafficLight.activeIndex(state: state, mode: .codex))
-      let x = Int(CGFloat(38 + index * 22) * CGFloat(bitmap.pixelsWide) / 90)
+      let x = Int(CGFloat(42 + index * 22) * CGFloat(bitmap.pixelsWide) / 94)
       let color = try XCTUnwrap(bitmap.colorAt(x: x, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB))
       XCTAssertGreaterThan(color.alphaComponent, 0.9)
       if state == .idle { XCTAssertGreaterThan(color.greenComponent, color.redComponent) }
@@ -231,6 +231,17 @@ final class AppModelTests: XCTestCase {
     XCTAssertTrue(restored.showTaskStatusInMenuBar)
   }
 
+  @MainActor
+  func testUsageIndicatorPreferencePersistsAndDefaultsToVisible() throws {
+    let suite = "UsageIndicatorTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(defaults: defaults)
+    XCTAssertTrue(model.showUsageInMenuBar)
+    model.showUsageInMenuBar = false
+    XCTAssertFalse(AppModel(defaults: defaults).showUsageInMenuBar)
+  }
+
   func testTaskTrafficLightStateMapping() {
     for mode in DisplayMode.allCases where mode.isUsageMode {
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .idle, mode: mode), 2)
@@ -249,7 +260,7 @@ final class AppModelTests: XCTestCase {
   }
 
   @MainActor
-  func testSelectedTaskStatusFollowsDisplayMode() throws {
+  func testSelectedTaskStatusFollowsSelectedAI() throws {
     let suite = "TaskMonitoringTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -261,7 +272,7 @@ final class AppModelTests: XCTestCase {
       case .claudeCode: XCTAssertEqual(model.selectedActivityState, model.claudeActivityState)
       case .qoder: XCTAssertEqual(model.selectedActivityState, model.qoderActivityState)
       case .grok: XCTAssertEqual(model.selectedActivityState, model.grokActivityState)
-      case .customImage: XCTAssertNil(model.selectedActivityState)
+      case .customImage: XCTAssertEqual(model.selectedActivityState, model.codexActivityState)
       }
     }
   }
@@ -376,6 +387,26 @@ final class AppModelTests: XCTestCase {
       UsageCardDesign.minimalColumn.rawValue
     )
     XCTAssertFalse(UsageCardDesign.selectableCases.contains(.classic))
+  }
+
+  @MainActor
+  func testQuotaRingsCanOnlyBeSelectedForCodex() throws {
+    XCTAssertTrue(UsageCardDesign.selectableCases(for: .codex).contains(.quotaRings))
+    XCTAssertFalse(UsageCardDesign.selectableCases(for: .claudeCode).contains(.quotaRings))
+    XCTAssertFalse(UsageCardDesign.selectableCases(for: .qoder).contains(.quotaRings))
+    XCTAssertFalse(UsageCardDesign.selectableCases(for: .grok).contains(.quotaRings))
+    XCTAssertEqual(UsageCardDesign.quotaRings.resolved(for: .qoder), .minimalColumn)
+
+    let suiteName = "QuotaRingsSelectionTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let model = AppModel(defaults: defaults)
+    model.setUsageCardDesign(.quotaRings)
+    XCTAssertEqual(model.usageCardDesign, .quotaRings)
+
+    model.setDisplayMode(.qoder)
+    model.setUsageCardDesign(.quotaRings)
+    XCTAssertEqual(model.usageCardDesign.resolved(for: .qoder), .minimalColumn)
   }
 
   @MainActor
@@ -603,7 +634,7 @@ final class AppModelTests: XCTestCase {
     await model.synchronize(upload: true, forceUpload: true)
 
     XCTAssertEqual(model.keyboardConnectionState, .pushFailed)
-    XCTAssertEqual(MenuBarIconAppearance.logoOpacity(for: .pushFailed), 0.5)
+    XCTAssertEqual(MenuBarIconAppearance.activePushDotCount(for: .pushFailed), 1)
     let request = try XCTUnwrap(model.lastPushRequest)
     XCTAssertEqual(request.endpoint, model.endpoint)
     XCTAssertNotNil(request.completedAt)
@@ -650,7 +681,7 @@ final class AppModelTests: XCTestCase {
     await model.synchronize(upload: true, forceUpload: true)
 
     XCTAssertEqual(model.keyboardConnectionState, .disconnected)
-    XCTAssertEqual(MenuBarIconAppearance.logoOpacity(for: .disconnected), 0)
+    XCTAssertEqual(MenuBarIconAppearance.activePushDotCount(for: .disconnected), 0)
   }
 
   @MainActor
@@ -691,7 +722,7 @@ final class MenuBarStatusIconTests: XCTestCase {
       )
     }
 
-    XCTAssertTrue(images.allSatisfy(\.isTemplate))
+    XCTAssertTrue(images.allSatisfy { !$0.isTemplate })
     XCTAssertEqual(Set(try images.map { try XCTUnwrap($0.tiffRepresentation) }).count, images.count)
 
     for image in images {
@@ -802,19 +833,76 @@ final class MenuBarStatusIconTests: XCTestCase {
     }
 
     XCTAssertGreaterThan(visibleBorderPixelCount, 20)
-    XCTAssertEqual(visibleCenterPixelCount, 0)
+    XCTAssertGreaterThan(visibleCenterPixelCount, 8)
   }
 
   func testKeyboardPushAppearanceRules() {
-    XCTAssertEqual(MenuBarIconAppearance.logoOpacity(for: .disconnected), 0)
-    XCTAssertEqual(MenuBarIconAppearance.logoOpacity(for: .connected), 1)
-    XCTAssertEqual(MenuBarIconAppearance.logoOpacity(for: .pushFailed), 0.5)
+    XCTAssertEqual(MenuBarIconAppearance.activePushDotCount(for: .disconnected), 0)
+    XCTAssertEqual(MenuBarIconAppearance.activePushDotCount(for: .pushFailed), 1)
+    XCTAssertEqual(MenuBarIconAppearance.activePushDotCount(for: .connected), 3)
+  }
+
+  @MainActor
+  func testMissingUsageAndInactivePushDotsRemainVisibleAsPlaceholders() throws {
+    let missingUsage = try bitmap(
+      for: MenuBarStatusIcon.makeStatusImage(
+        connectionState: .disconnected,
+        remainingPercent: nil
+      )
+    )
+    let hiddenUsage = try bitmap(
+      for: MenuBarStatusIcon.makeStatusImage(
+        connectionState: .disconnected,
+        showUsage: false,
+        remainingPercent: nil
+      )
+    )
+
+    XCTAssertGreaterThan(alpha(in: missingUsage, x: 11, y: 19), 0.12)
+    XCTAssertLessThan(alpha(in: missingUsage, x: 11, y: 19), 0.45)
+    XCTAssertLessThan(alpha(in: hiddenUsage, x: 11, y: 19), 0.08)
+
+    for point in [(5, 4), (11, 2), (17, 4)] {
+      let dotAlpha = alpha(in: missingUsage, x: point.0, y: point.1)
+      XCTAssertGreaterThan(dotAlpha, 0.12)
+      XCTAssertLessThan(dotAlpha, 0.45)
+    }
+  }
+
+  @MainActor
+  func testPushDotsFillProgressivelyWhileUnusedDotsStayVisible() throws {
+    let failed = try bitmap(
+      for: MenuBarStatusIcon.makeStatusImage(
+        connectionState: .pushFailed,
+        showUsage: false
+      )
+    )
+    let connected = try bitmap(
+      for: MenuBarStatusIcon.makeStatusImage(
+        connectionState: .connected,
+        showUsage: false
+      )
+    )
+
+    XCTAssertGreaterThan(alpha(in: failed, x: 5, y: 4), 0.75)
+    XCTAssertLessThan(alpha(in: failed, x: 11, y: 2), 0.45)
+    XCTAssertLessThan(alpha(in: failed, x: 17, y: 4), 0.45)
+    for point in [(5, 4), (11, 2), (17, 4)] {
+      XCTAssertGreaterThan(alpha(in: connected, x: point.0, y: point.1), 0.75)
+    }
   }
 
   @MainActor
   private func bitmap(for image: NSImage) throws -> NSBitmapImageRep {
     let data = try XCTUnwrap(image.tiffRepresentation)
     return try XCTUnwrap(NSBitmapImageRep(data: data))
+  }
+
+  private func alpha(in bitmap: NSBitmapImageRep, x: Int, y: Int) -> CGFloat {
+    let pixelX = min(bitmap.pixelsWide - 1, x * bitmap.pixelsWide / 22)
+    let pixelY = min(bitmap.pixelsHigh - 1, (21 - y) * bitmap.pixelsHigh / 22)
+    return bitmap.colorAt(x: pixelX, y: pixelY)?
+      .usingColorSpace(.deviceRGB)?.alphaComponent ?? 0
   }
 }
 

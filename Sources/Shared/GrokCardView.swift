@@ -95,6 +95,8 @@ struct GrokCardView: View {
       )
     case .nothingMatrix:
       EmptyView()
+    case .quotaRings:
+      EmptyView()
     }
   }
 
@@ -119,6 +121,8 @@ struct GrokCardView: View {
       minimalColumnLayout
     case .nothingMatrix:
       nothingMatrixLayout
+    case .quotaRings:
+      minimalColumnLayout
     }
   }
 

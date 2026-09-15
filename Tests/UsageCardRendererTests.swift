@@ -5,6 +5,10 @@ import XCTest
 @testable import CodexLinxDisplay
 
 final class UsageCardRendererTests: XCTestCase {
+  private var nonCodexDesigns: [UsageCardDesign] {
+    UsageCardDesign.allCases.filter { $0 != .quotaRings }
+  }
+
   @MainActor
   func testPopupFiveHourDataDoesNotChangeKeyboardImage() throws {
     var snapshot = UsageSnapshot.sample
@@ -79,8 +83,52 @@ final class UsageCardRendererTests: XCTestCase {
   }
 
   @MainActor
+  func testQuotaRingsUsesBlackCanvasAndRespondsToBothRemainingWindows() throws {
+    var lowFiveHour = UsageSnapshot.sample
+    lowFiveHour.fiveHourRemainingPercent = 20
+    var highFiveHour = UsageSnapshot.sample
+    highFiveHour.fiveHourRemainingPercent = 80
+
+    let low = try UsageCardRenderer.render(
+      snapshot: lowFiveHour,
+      activityState: .running,
+      safeAreaHeight: UsageCardLayout.defaultSafeArea,
+      jpegQuality: 0.95,
+      colorScheme: .signalYellow,
+      design: .quotaRings
+    )
+    let high = try UsageCardRenderer.render(
+      snapshot: highFiveHour,
+      activityState: .running,
+      safeAreaHeight: UsageCardLayout.defaultSafeArea,
+      jpegQuality: 0.95,
+      colorScheme: .signalYellow,
+      design: .quotaRings
+    )
+
+    XCTAssertNotEqual(low.data, high.data)
+    let bitmap = try XCTUnwrap(NSBitmapImageRep(data: low.data))
+    for point in [(1, 1), (140, 1), (1, 426), (140, 426)] {
+      let color = try XCTUnwrap(
+        bitmap.colorAt(x: point.0, y: point.1)?.usingColorSpace(.deviceRGB)
+      )
+      XCTAssertLessThan(color.redComponent, 0.06)
+      XCTAssertLessThan(color.greenComponent, 0.06)
+      XCTAssertLessThan(color.blueComponent, 0.06)
+    }
+
+    let attachment = XCTAttachment(
+      data: low.data,
+      uniformTypeIdentifier: "public.jpeg"
+    )
+    attachment.name = "Codex-quota-rings-black-canvas"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  @MainActor
   func testEveryClaudeLayoutProducesDistinctDeviceOutput() throws {
-    let renderedCards = try UsageCardDesign.allCases.map { design in
+    let renderedCards = try nonCodexDesigns.map { design in
       try UsageCardRenderer.render(
         claudeSnapshot: .sample,
         activityState: .running,
@@ -91,7 +139,7 @@ final class UsageCardRendererTests: XCTestCase {
       )
     }
 
-    XCTAssertEqual(renderedCards.count, UsageCardDesign.allCases.count)
+    XCTAssertEqual(renderedCards.count, nonCodexDesigns.count)
     XCTAssertEqual(Set(renderedCards.map(\.data)).count, renderedCards.count)
     XCTAssertTrue(renderedCards.allSatisfy { $0.pixelWidth == 142 && $0.pixelHeight == 428 })
     XCTAssertTrue(renderedCards.allSatisfy { $0.data.count <= 512 * 1_024 })
@@ -99,7 +147,7 @@ final class UsageCardRendererTests: XCTestCase {
 
   @MainActor
   func testEveryGrokLayoutProducesDistinctDeviceOutput() throws {
-    let renderedCards = try UsageCardDesign.allCases.map { design in
+    let renderedCards = try nonCodexDesigns.map { design in
       try UsageCardRenderer.render(
         grokSnapshot: .sample,
         activityState: .running,
@@ -110,7 +158,7 @@ final class UsageCardRendererTests: XCTestCase {
       )
     }
 
-    XCTAssertEqual(renderedCards.count, UsageCardDesign.allCases.count)
+    XCTAssertEqual(renderedCards.count, nonCodexDesigns.count)
     XCTAssertEqual(Set(renderedCards.map(\.data)).count, renderedCards.count)
     XCTAssertTrue(renderedCards.allSatisfy { $0.pixelWidth == 142 && $0.pixelHeight == 428 })
     XCTAssertTrue(renderedCards.allSatisfy { $0.data.count <= 512 * 1_024 })
@@ -130,7 +178,7 @@ final class UsageCardRendererTests: XCTestCase {
       onDemandCap: 0
     )
 
-    for design in UsageCardDesign.allCases {
+    for design in nonCodexDesigns {
       let populated = try UsageCardRenderer.render(
         grokSnapshot: emptyRemaining,
         activityState: .running,
@@ -161,7 +209,7 @@ final class UsageCardRendererTests: XCTestCase {
 
   @MainActor
   func testEveryQoderLayoutProducesDistinctDeviceOutput() throws {
-    let renderedCards = try UsageCardDesign.allCases.map { design in
+    let renderedCards = try nonCodexDesigns.map { design in
       try UsageCardRenderer.render(
         qoderSnapshot: .sample,
         creditSnapshot: .sample,
@@ -173,7 +221,7 @@ final class UsageCardRendererTests: XCTestCase {
       )
     }
 
-    XCTAssertEqual(renderedCards.count, UsageCardDesign.allCases.count)
+    XCTAssertEqual(renderedCards.count, nonCodexDesigns.count)
     XCTAssertEqual(Set(renderedCards.map(\.data)).count, renderedCards.count)
     XCTAssertTrue(renderedCards.allSatisfy { $0.pixelWidth == 142 && $0.pixelHeight == 428 })
     XCTAssertTrue(renderedCards.allSatisfy { $0.data.count <= 512 * 1_024 })
@@ -182,7 +230,7 @@ final class UsageCardRendererTests: XCTestCase {
   @MainActor
   func testEveryQoderColorAndLayoutCombinationRendersWithinLimits() throws {
     for colorScheme in UsageCardColorScheme.allCases {
-      for design in UsageCardDesign.allCases {
+      for design in nonCodexDesigns {
         let rendered = try UsageCardRenderer.render(
           qoderSnapshot: .sample,
           creditSnapshot: .sample,
@@ -220,7 +268,7 @@ final class UsageCardRendererTests: XCTestCase {
       contextLimitTokens: 200_000
     )
 
-    for design in UsageCardDesign.allCases {
+    for design in nonCodexDesigns {
       let populated = try UsageCardRenderer.render(
         qoderSnapshot: largeSnapshot,
         creditSnapshot: largeCredit,

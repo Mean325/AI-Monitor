@@ -120,6 +120,8 @@ struct QoderCardView: View {
       )
     case .nothingMatrix:
       EmptyView()
+    case .quotaRings:
+      EmptyView()
     }
   }
 
@@ -144,6 +146,8 @@ struct QoderCardView: View {
       minimalColumnLayout
     case .nothingMatrix:
       nothingMatrixLayout
+    case .quotaRings:
+      minimalColumnLayout
     }
   }
 

@@ -139,7 +139,7 @@ enum UsageCardRenderer {
       activityState: activityState,
       safeAreaHeight: safeAreaHeight,
       colorScheme: colorScheme,
-      design: design
+      design: design.resolved(for: .claudeCode)
     )
       .frame(width: UsageCardLayout.width, height: UsageCardLayout.height)
 
@@ -183,7 +183,7 @@ enum UsageCardRenderer {
       activityState: activityState,
       safeAreaHeight: safeAreaHeight,
       colorScheme: colorScheme,
-      design: design
+      design: design.resolved(for: .qoder)
     )
       .frame(width: UsageCardLayout.width, height: UsageCardLayout.height)
 
@@ -225,7 +225,7 @@ enum UsageCardRenderer {
       activityState: activityState,
       safeAreaHeight: safeAreaHeight,
       colorScheme: colorScheme,
-      design: design
+      design: design.resolved(for: .grok)
     )
       .frame(width: UsageCardLayout.width, height: UsageCardLayout.height)
 

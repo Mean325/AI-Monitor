@@ -609,7 +609,7 @@ struct SettingsView: View {
                   ],
                   spacing: 10
                 ) {
-                  ForEach(UsageCardDesign.selectableCases) { design in
+                  ForEach(UsageCardDesign.selectableCases(for: model.displayMode)) { design in
                     usageDesignOption(design)
                   }
                 }
@@ -842,6 +842,27 @@ struct SettingsView: View {
         }
         .padding(.vertical, 6)
         if model.showTaskStatusInMenuBar {
+          HStack {
+            Image(nsImage: TaskTrafficLight.makeImage(
+              state: model.selectedActivityState, mode: model.selectedAIMode))
+            Text(model.taskStatusDescription).font(.caption)
+          }
+          Text("红灯等待授权/失败 · 黄灯进行中 · 绿灯完成/空闲。")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+
+        Divider().opacity(0.5)
+
+        HStack {
+          Text("状态栏展示用量")
+          Spacer()
+          Toggle("状态栏展示用量", isOn: $model.showUsageInMenuBar)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .tint(systemAccent)
+        }
+        .padding(.vertical, 6)
+        if model.showUsageInMenuBar {
           Text("原图标位置")
             .font(.caption).foregroundStyle(.secondary)
           AppGlassGroup {
@@ -856,14 +877,6 @@ struct SettingsView: View {
             }
           }
         }
-        Divider().opacity(0.5)
-        HStack {
-          Image(nsImage: TaskTrafficLight.makeImage(
-            state: model.selectedActivityState, mode: model.displayMode))
-          Text(model.taskStatusDescription).font(.caption)
-        }
-        Text("红灯等待授权/失败 · 黄灯进行中 · 绿灯完成/空闲。图片模式不监控任务。")
-          .font(.caption).foregroundStyle(.secondary)
       }
 
       if model.selectedAIMode == .codex {
@@ -1424,7 +1437,7 @@ struct SettingsView: View {
   }
 
   private func usageDesignOption(_ design: UsageCardDesign) -> some View {
-    let isSelected = model.usageCardDesign == design
+    let isSelected = model.usageCardDesign.resolved(for: model.displayMode) == design
     let tint = selectedColorAccent
     let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
@@ -1585,15 +1598,16 @@ struct SettingsView: View {
   }
 
   private var previewDescription: String {
+    let design = model.usageCardDesign.resolved(for: model.displayMode)
     switch model.displayMode {
     case .codex:
-      return "\(model.usageCardDesign.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
+      return "\(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
     case .claudeCode:
-      return "Claude Code · \(model.usageCardDesign.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
+      return "Claude Code · \(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
     case .qoder:
-      return "Qoder · \(model.usageCardDesign.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
+      return "Qoder · \(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
     case .grok:
-      return "Grok · \(model.usageCardDesign.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
+      return "Grok · \(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
     case .customImage:
       return "\(model.displayMode.title) · 顶部 \(Int(model.safeAreaHeight))px 留空"
     }

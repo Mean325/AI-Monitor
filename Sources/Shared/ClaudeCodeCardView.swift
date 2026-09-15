@@ -82,6 +82,8 @@ struct ClaudeCodeCardView: View {
         colors: [chronosPrimary.opacity(0.05), .clear], startPoint: .top, endPoint: .bottom)
     case .nothingMatrix:
       EmptyView()
+    case .quotaRings:
+      EmptyView()
     }
   }
 
@@ -101,6 +103,7 @@ struct ClaudeCodeCardView: View {
     case .commandDeck: commandDeckLayout
     case .minimalColumn: minimalColumnLayout
     case .nothingMatrix: nothingMatrixLayout
+    case .quotaRings: minimalColumnLayout
     }
   }
 

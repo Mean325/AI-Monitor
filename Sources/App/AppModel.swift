@@ -126,6 +126,12 @@ final class AppModel: ObservableObject {
     }
   }
 
+  @Published var showUsageInMenuBar: Bool {
+    didSet {
+      defaults.set(showUsageInMenuBar, forKey: "showUsageInMenuBar")
+    }
+  }
+
   @Published var menuBarOriginalIconPosition: MenuBarOriginalIconPosition {
     didSet {
       defaults.set(menuBarOriginalIconPosition.rawValue, forKey: "menuBarOriginalIconPosition")
@@ -133,7 +139,7 @@ final class AppModel: ObservableObject {
   }
 
   var selectedActivityState: CodexActivityState? {
-    switch displayMode {
+    switch selectedAIMode {
     case .codex: return codexActivityState
     case .claudeCode: return claudeActivityState
     case .qoder: return qoderActivityState
@@ -142,8 +148,18 @@ final class AppModel: ObservableObject {
     }
   }
 
+  var selectedUsageRemainingPercent: Int? {
+    switch selectedAIMode {
+    case .codex: return snapshot?.remainingPercent
+    case .claudeCode: return nil
+    case .qoder: return qoderCreditSnapshot?.remainingPercent
+    case .grok: return grokSnapshot?.remainingPercent
+    case .customImage: return nil
+    }
+  }
+
   var taskStatusDescription: String {
-    "\(displayMode.title) · \(selectedActivityState?.title ?? "未选择 AI")"
+    "\(selectedAIMode.title) · \(selectedActivityState?.title ?? "未选择 AI")"
   }
 
   func refreshSelectedActivity() {
@@ -248,6 +264,7 @@ final class AppModel: ObservableObject {
     self.defaults = defaults
     isLinxEnabled = defaults.object(forKey: Keys.linxEnabled) as? Bool ?? true
     showTaskStatusInMenuBar = defaults.bool(forKey: "showTaskStatusInMenuBar")
+    showUsageInMenuBar = defaults.object(forKey: "showUsageInMenuBar") as? Bool ?? true
     menuBarOriginalIconPosition = MenuBarOriginalIconPosition(
       rawValue: defaults.string(forKey: "menuBarOriginalIconPosition") ?? ""
     ) ?? .left
@@ -582,6 +599,7 @@ final class AppModel: ObservableObject {
   }
 
   func setUsageCardDesign(_ design: UsageCardDesign) {
+    guard design.isAvailable(for: displayMode) else { return }
     guard usageCardDesign != design else { return }
 
     usageCardDesign = design

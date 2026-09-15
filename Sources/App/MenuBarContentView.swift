@@ -21,31 +21,46 @@ struct MenuBarContentView: View {
 
         VStack(alignment: .leading, spacing: 10) {
           HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-              HStack(spacing: 6) {
-                Text(model.bluetoothKeyboardInfo?.name ?? "Linx68")
-                  .font(.caption.weight(.semibold))
-                  .lineLimit(1)
+            HStack(spacing: 7) {
+              Text(model.bluetoothKeyboardInfo?.name ?? "Linx68")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
 
-                if model.bluetoothKeyboardInfo?.isConnected == true {
-                  Image(systemName: batterySymbol)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(batteryColor)
-                    .accessibilityLabel(batteryAccessibilityText)
-                }
+              Image(nsImage: NSImage(named: NSImage.bluetoothTemplateName) ?? NSImage())
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 11, height: 15)
+                .foregroundStyle(bluetoothStatusColor)
+                .accessibilityLabel(bluetoothAccessibilityText)
+
+              HStack(spacing: 3) {
+                Text(batteryPercentText)
+                  .font(.caption2.monospacedDigit())
+                Image(systemName: batterySymbol)
+                  .font(.system(size: 13, weight: .medium))
               }
-              Text(keyboardDetailText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+              .foregroundStyle(batteryColor)
+              .accessibilityElement(children: .ignore)
+              .accessibilityLabel(batteryAccessibilityText)
             }
 
             Spacer(minLength: 8)
 
-            Image(systemName: pushStatusSymbol)
-              .font(.system(size: 19, weight: .bold))
-              .symbolRenderingMode(.hierarchical)
-              .foregroundStyle(pushStatusColor)
-              .accessibilityLabel(pushStatusAccessibilityText)
+            ZStack {
+              if model.isSyncing {
+                ProgressView()
+                  .controlSize(.small)
+                  .accessibilityLabel("正在同步并推送")
+              } else {
+                Image(systemName: pushStatusSymbol)
+                  .font(.system(size: 19, weight: .bold))
+                  .symbolRenderingMode(.hierarchical)
+                  .foregroundStyle(pushStatusColor)
+                  .accessibilityLabel(pushStatusAccessibilityText)
+              }
+            }
+            .frame(width: 22, height: 22)
           }
 
           HStack {
@@ -110,13 +125,18 @@ struct MenuBarContentView: View {
     model.displayMode == .customImage ? "选择图片" : "刷新并推送"
   }
 
-  private var keyboardDetailText: String {
-    guard let keyboard = model.bluetoothKeyboardInfo else { return "蓝牙未连接" }
-    guard keyboard.isConnected else { return "蓝牙未连接" }
-    return "蓝牙已连接"
+  private var bluetoothAccessibilityText: String {
+    model.bluetoothKeyboardInfo?.isConnected == true ? "蓝牙已连接" : "蓝牙未连接"
+  }
+
+  private var bluetoothStatusColor: Color {
+    model.bluetoothKeyboardInfo?.isConnected == true ? systemAccent : .secondary.opacity(0.65)
   }
 
   private var batterySymbol: String {
+    guard model.bluetoothKeyboardInfo?.isConnected == true else {
+      return "battery.0percent"
+    }
     guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else {
       return "battery.0percent"
     }
@@ -130,13 +150,24 @@ struct MenuBarContentView: View {
   }
 
   private var batteryColor: Color {
+    guard model.bluetoothKeyboardInfo?.isConnected == true else {
+      return .secondary.opacity(0.65)
+    }
     guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return .secondary }
     if battery <= 10 { return .red }
     if battery <= 20 { return .orange }
     return .primary
   }
 
+  private var batteryPercentText: String {
+    guard model.bluetoothKeyboardInfo?.isConnected == true,
+          let battery = model.bluetoothKeyboardInfo?.batteryPercent
+    else { return "--%" }
+    return "\(battery)%"
+  }
+
   private var batteryAccessibilityText: String {
+    guard model.bluetoothKeyboardInfo?.isConnected == true else { return "蓝牙未连接，电量不可用" }
     guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return "电量不可用" }
     return "电量 \(battery)%"
   }
@@ -198,10 +229,6 @@ struct MenuBarContentView: View {
 
       Spacer()
 
-      if model.isLinxEnabled, model.isSyncing {
-        ProgressView()
-          .controlSize(.small)
-      }
     }
   }
 
@@ -300,15 +327,19 @@ struct MenuBarContentView: View {
     return "重置 " + formatter.string(from: date)
   }
 
-  private func summaryCell(title: String, value: String, resetText: String? = nil) -> some View {
+  private func summaryCell(
+    title: String,
+    value: String,
+    resetText: String? = nil
+  ) -> some View {
     VStack(alignment: .leading, spacing: 4) {
       Text(title)
         .font(.caption)
         .foregroundStyle(.secondary)
       Text(value)
-        .font(.title2.bold())
+        .font(.system(size: 18, weight: .bold, design: .rounded))
         .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .truncationMode(.tail)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(10)

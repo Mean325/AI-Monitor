@@ -6,7 +6,7 @@ struct UsageSnapshot: Equatable, Sendable {
   let windowMinutes: Int?
   let availableResetCount: Int
   let planType: String?
-  // Additional popup-only data; the keyboard card continues to use the main window.
+  // Short-window data used by the popup and Codex's optional dual-ring card.
   var fiveHourRemainingPercent: Int? = nil
   var fiveHourResetDate: Date? = nil
 

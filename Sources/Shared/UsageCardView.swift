@@ -571,11 +571,24 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
   case commandDeck
   case minimalColumn
   case nothingMatrix
+  case quotaRings
 
   var id: String { rawValue }
 
   static var selectableCases: [UsageCardDesign] {
     allCases.filter { $0 != .classic }
+  }
+
+  static func selectableCases(for mode: DisplayMode) -> [UsageCardDesign] {
+    selectableCases.filter { $0.isAvailable(for: mode) }
+  }
+
+  func isAvailable(for mode: DisplayMode) -> Bool {
+    self != .quotaRings || mode == .codex
+  }
+
+  func resolved(for mode: DisplayMode) -> UsageCardDesign {
+    isAvailable(for: mode) ? self : .minimalColumn
   }
 
   var title: String {
@@ -586,6 +599,7 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
     case .commandDeck: return "指挥舱"
     case .minimalColumn: return "简约立柱"
     case .nothingMatrix: return "Nothing 矩阵"
+    case .quotaRings: return "双环余量"
     }
   }
 
@@ -597,6 +611,7 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
     case .commandDeck: return "数据仪表"
     case .minimalColumn: return "纵向进度"
     case .nothingMatrix: return "黑白点阵"
+    case .quotaRings: return "5h 与周余量"
     }
   }
 
@@ -608,11 +623,12 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
     case .commandDeck: return "scope"
     case .minimalColumn: return "rectangle.split.1x2.fill"
     case .nothingMatrix: return "circle.grid.3x3.fill"
+    case .quotaRings: return "circle.circle.fill"
     }
   }
 
   var usesFullCanvas: Bool {
-    self == .minimalColumn || self == .nothingMatrix
+    self == .minimalColumn || self == .nothingMatrix || self == .quotaRings
   }
 }
 
@@ -666,6 +682,7 @@ struct UsageCardView: View {
     design.usesFullCanvas ? 0 : safeAreaHeight + 1
   }
   private var backgroundColor: Color {
+    if design == .quotaRings { return .black }
     if design == .minimalColumn { return chronosSurface }
     if design == .nothingMatrix { return palette.background }
     return palette.background
@@ -737,6 +754,8 @@ struct UsageCardView: View {
       )
     case .nothingMatrix:
       EmptyView()
+    case .quotaRings:
+      EmptyView()
     }
   }
 
@@ -761,6 +780,8 @@ struct UsageCardView: View {
       minimalColumnLayout
     case .nothingMatrix:
       nothingMatrixLayout
+    case .quotaRings:
+      quotaRingsLayout
     }
   }
 
@@ -1332,6 +1353,132 @@ struct UsageCardView: View {
       palette.cardBackground.opacity(0.74),
       in: RoundedRectangle(cornerRadius: 14, style: .continuous)
     )
+  }
+
+  private var quotaRingsLayout: some View {
+    let ink = Color.white
+    let mutedInk = Color.white.opacity(0.52)
+
+    return VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .firstTextBaseline) {
+          Text("CODEX")
+            .font(.system(size: 15, weight: .heavy, design: .rounded))
+            .tracking(1.15)
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+
+          Spacer(minLength: 4)
+
+          Text("AI QUOTA")
+            .font(.system(size: 6, weight: .semibold, design: .rounded))
+            .tracking(0.9)
+            .foregroundStyle(mutedInk)
+        }
+
+        HStack(spacing: 5) {
+          Circle()
+            .fill(activityIndicatorColor)
+            .frame(width: 6, height: 6)
+          Text(activityState.title)
+            .font(.system(size: 7, weight: .semibold, design: .rounded))
+            .foregroundStyle(ink.opacity(0.78))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.07), in: Capsule())
+        .overlay { Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1) }
+        .fixedSize(horizontal: true, vertical: false)
+      }
+
+      VStack(alignment: .leading, spacing: 6) {
+        Text("下次重置")
+          .font(.system(size: 7, weight: .semibold, design: .rounded))
+          .tracking(0.7)
+          .foregroundStyle(mutedInk)
+
+        Text(resetDateText)
+          .font(.system(size: 18, weight: .bold, design: .rounded))
+          .foregroundStyle(ink)
+
+        HStack(alignment: .firstTextBaseline) {
+          Text(resetTimeText)
+            .font(.system(size: 9, weight: .semibold, design: .rounded))
+            .foregroundStyle(palette.accent)
+          Spacer(minLength: 4)
+          Text(snapshot.map { "可用重置  \($0.availableResetCount) 次" } ?? "可用重置  --")
+            .font(.system(size: 9, weight: .semibold, design: .rounded))
+            .minimumScaleFactor(0.72)
+            .lineLimit(1)
+            .foregroundStyle(ink.opacity(0.72))
+        }
+      }
+      .padding(.leading, 12)
+      .padding(.trailing, 10)
+      .padding(.vertical, 10)
+      .background(Color.white.opacity(0.065), in: RoundedRectangle(cornerRadius: 14))
+      .overlay(alignment: .leading) {
+        Capsule()
+          .fill(palette.accent)
+          .frame(width: 3)
+          .padding(.vertical, 9)
+          .padding(.leading, 4)
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: 14)
+          .stroke(Color.white.opacity(0.08), lineWidth: 1)
+      }
+      .padding(.top, 12)
+
+      Spacer(minLength: 12)
+
+      VStack(spacing: 14) {
+        quotaRing(label: "5h", percent: snapshot?.fiveHourRemainingPercent, ink: ink)
+        quotaRing(label: "W", percent: snapshot?.remainingPercent, ink: ink)
+      }
+      .frame(maxWidth: .infinity)
+    }
+    .padding(.horizontal, 14)
+    .padding(.top, safeAreaHeight + 12)
+    .padding(.bottom, 18)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(Color.black)
+  }
+
+  private func quotaRing(label: String, percent: Int?, ink: Color) -> some View {
+    let progress = CGFloat(max(0, min(100, percent ?? 0))) / 100
+    return ZStack {
+      Circle()
+        .stroke(Color.white.opacity(0.10), lineWidth: 7)
+
+      if percent != nil, progress > 0 {
+        Circle()
+          .trim(from: 0, to: progress)
+          .stroke(
+            palette.accent,
+            style: StrokeStyle(lineWidth: 7, lineCap: .round)
+          )
+          .rotationEffect(.degrees(-90))
+          .shadow(color: palette.accent.opacity(0.42), radius: 3)
+      }
+
+      quotaRingLabel(label, color: ink.opacity(percent == nil ? 0.34 : 0.76))
+    }
+    .frame(width: 88, height: 88)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(label == "5h" ? "五小时剩余用量" : "周剩余用量")
+    .accessibilityValue(percent.map { "\($0)%" } ?? "暂无数据")
+  }
+
+  @ViewBuilder
+  private func quotaRingLabel(_ label: String, color: Color) -> some View {
+    Text(label)
+      .font(.system(size: 24, weight: .semibold, design: .rounded))
+      .tracking(label == "5h" ? -0.8 : 0)
+      .foregroundStyle(color)
   }
 
   private var minimalColumnLayout: some View {

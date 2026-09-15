@@ -35,8 +35,10 @@ struct CodexLinxDisplayApp: App {
       MenuBarStatusLabel(
         title: menuBarTitle,
         connectionState: model.keyboardConnectionState,
-        displayMode: model.displayMode,
+        displayMode: model.selectedAIMode,
         showTaskStatus: model.showTaskStatusInMenuBar,
+        showUsage: model.showUsageInMenuBar,
+        remainingPercent: model.selectedUsageRemainingPercent,
         iconPosition: model.menuBarOriginalIconPosition,
         activityState: model.selectedActivityState
       )
@@ -89,6 +91,8 @@ private struct MenuBarStatusLabel: View {
   let connectionState: KeyboardConnectionState
   let displayMode: DisplayMode
   let showTaskStatus: Bool
+  let showUsage: Bool
+  let remainingPercent: Int?
   let iconPosition: MenuBarOriginalIconPosition
   let activityState: CodexActivityState?
 
@@ -98,12 +102,14 @@ private struct MenuBarStatusLabel: View {
         connectionState: connectionState,
         displayMode: displayMode,
         showTaskStatus: showTaskStatus,
+        showUsage: showUsage,
+        remainingPercent: remainingPercent,
         activityState: activityState,
         iconPosition: iconPosition,
         darkAppearance: colorScheme == .dark
       )
     )
-      .renderingMode(showTaskStatus ? .original : .template)
+      .renderingMode(.original)
       .accessibilityLabel(Text(accessibilityText))
   }
 
@@ -115,22 +121,25 @@ private struct MenuBarStatusLabel: View {
     case .pushFailed: stateText = "键盘已连接，但推送失败"
     }
     let taskText = showTaskStatus ? "，\(activityState?.title ?? "未选择 AI")" : ""
-    return "\(title)，\(stateText)\(taskText)"
+    let usageText = showUsage ? "，剩余用量 \(remainingPercent.map(String.init) ?? "未知")%" : ""
+    return "\(title)，\(stateText)\(usageText)\(taskText)"
   }
 }
 
 enum MenuBarIconAppearance {
-  static func logoOpacity(for state: KeyboardConnectionState) -> Double {
+  static func activePushDotCount(for state: KeyboardConnectionState) -> Int {
     switch state {
     case .disconnected: return 0
-    case .connected: return 1
-    case .pushFailed: return 0.5
+    case .pushFailed: return 1
+    case .connected: return 3
     }
   }
 }
 
 enum MenuBarStatusIcon {
-  private static let imageSize = NSSize(width: 18, height: 18)
+  private static let imageSize = NSSize(width: 22, height: 22)
+  private static let ringCenter = NSPoint(x: 11, y: 10.35)
+  private static let ringRadius: CGFloat = 8.7
 
   // MenuBarExtra bridges its label to an NSStatusItem; use one image rather
   // than multiple Image children, which can be dropped by that bridge.
@@ -138,22 +147,36 @@ enum MenuBarStatusIcon {
     connectionState: KeyboardConnectionState,
     displayMode: DisplayMode,
     showTaskStatus: Bool,
+    showUsage: Bool = true,
+    remainingPercent: Int? = nil,
     activityState: CodexActivityState?,
     iconPosition: MenuBarOriginalIconPosition = .left,
     darkAppearance: Bool = false
   ) -> NSImage {
-    let icon = makeStatusImage(connectionState: connectionState, displayMode: displayMode)
+    let icon = makeStatusImage(
+      connectionState: connectionState,
+      displayMode: displayMode,
+      showUsage: showUsage,
+      remainingPercent: remainingPercent,
+      darkAppearance: darkAppearance
+    )
     guard showTaskStatus else { return icon }
     let lights = TaskTrafficLight.makeImage(state: activityState, mode: displayMode)
     guard iconPosition != .hidden else { return lights }
     let iconX: CGFloat = iconPosition == .left ? 0 : lights.size.width + 12
-    let lightsX: CGFloat = iconPosition == .left ? 30 : 0
-    let image = NSImage(size: NSSize(width: 30 + lights.size.width, height: 18), flipped: false) { _ in
+    let lightsX: CGFloat = iconPosition == .left ? imageSize.width + 12 : 0
+    let image = NSImage(
+      size: NSSize(width: imageSize.width + 12 + lights.size.width, height: imageSize.height),
+      flipped: false
+    ) { _ in
       let iconRect = NSRect(x: iconX, y: 0, width: imageSize.width, height: imageSize.height)
       icon.draw(in: iconRect)
-      (darkAppearance ? NSColor.white : NSColor.black).setFill()
-      iconRect.fill(using: .sourceAtop)
-      lights.draw(in: NSRect(x: lightsX, y: 0, width: lights.size.width, height: 18))
+      lights.draw(in: NSRect(
+        x: lightsX,
+        y: (imageSize.height - lights.size.height) / 2,
+        width: lights.size.width,
+        height: lights.size.height
+      ))
       return true
     }
     image.isTemplate = false
@@ -162,51 +185,118 @@ enum MenuBarStatusIcon {
 
   static func makeStatusImage(
     connectionState: KeyboardConnectionState,
-    displayMode: DisplayMode = .codex
+    displayMode: DisplayMode = .codex,
+    showUsage: Bool = true,
+    remainingPercent: Int? = nil,
+    darkAppearance: Bool = false
   ) -> NSImage {
     let image = NSImage(size: imageSize, flipped: false) { _ in
-      let logoOpacity = MenuBarIconAppearance.logoOpacity(for: connectionState)
-      if logoOpacity > 0 {
-        drawLogo(for: displayMode, opacity: logoOpacity)
+      let foreground = darkAppearance ? NSColor.white : NSColor.black
+      let placeholder = foreground.withAlphaComponent(0.22)
+      if showUsage {
+        drawUsageRing(
+          remainingPercent: remainingPercent,
+          foreground: foreground,
+          placeholder: placeholder
+        )
       }
-      drawFrame()
+      drawLogo(for: displayMode, color: foreground)
+      drawPushDots(state: connectionState, foreground: foreground, placeholder: placeholder)
       return true
     }
-    image.isTemplate = true
+    image.isTemplate = false
     return image
   }
 
   static func makeFrameImage() -> NSImage {
     let image = NSImage(size: imageSize, flipped: false) { _ in
-      drawFrame()
+      drawUsageRing(remainingPercent: 100, foreground: .black,
+                    placeholder: NSColor.black.withAlphaComponent(0.22))
       return true
     }
-    image.isTemplate = true
+    image.isTemplate = false
     return image
   }
 
   static func makeLogoImage(displayMode: DisplayMode = .codex) -> NSImage {
     let image = NSImage(size: imageSize, flipped: false) { _ in
-      drawLogo(for: displayMode, opacity: 1)
+      drawLogo(for: displayMode, color: .black)
       return true
     }
     image.isTemplate = true
     return image
   }
 
-  private static func drawFrame() {
-    NSColor.black.withAlphaComponent(0.82).setStroke()
+  private static func drawUsageRing(
+    remainingPercent: Int?,
+    foreground: NSColor,
+    placeholder: NSColor
+  ) {
+    // Leave a wide lower opening so the status dots complete the circle
+    // without touching the rounded ends of the usage arc.
+    let start: CGFloat = -20
+    let end: CGFloat = 200
+    let track = NSBezierPath()
+    track.appendArc(withCenter: ringCenter, radius: ringRadius, startAngle: start, endAngle: end)
+    track.lineWidth = 2
+    track.lineCapStyle = .round
+    placeholder.setStroke()
+    track.stroke()
 
-    let frame = NSBezierPath(
-      roundedRect: NSRect(x: 0.75, y: 0.75, width: 16.5, height: 16.5),
-      xRadius: 3.2,
-      yRadius: 3.2
+    guard let remainingPercent else { return }
+    let value = CGFloat(max(0, min(100, remainingPercent))) / 100
+    guard value > 0 else { return }
+    let progress = NSBezierPath()
+    progress.appendArc(
+      withCenter: ringCenter,
+      radius: ringRadius,
+      startAngle: end,
+      endAngle: end - (end - start) * value,
+      clockwise: true
     )
-    frame.lineWidth = 1.1
-    frame.stroke()
+    progress.lineWidth = 2
+    progress.lineCapStyle = .round
+    foreground.setStroke()
+    progress.stroke()
   }
 
-  private static func drawLogo(for displayMode: DisplayMode, opacity: Double) {
+  private static func drawPushDots(
+    state: KeyboardConnectionState,
+    foreground: NSColor,
+    placeholder: NSColor
+  ) {
+    let activeCount = MenuBarIconAppearance.activePushDotCount(for: state)
+    let angles: [CGFloat] = [230, 270, 310]
+    for (index, angle) in angles.enumerated() {
+      let radians = angle * .pi / 180
+      let center = NSPoint(
+        x: ringCenter.x + cos(radians) * ringRadius,
+        y: ringCenter.y + sin(radians) * ringRadius
+      )
+      (index < activeCount ? foreground : placeholder).setFill()
+      NSBezierPath(ovalIn: NSRect(
+        x: center.x - 1.55,
+        y: center.y - 1.55,
+        width: 3.1,
+        height: 3.1
+      )).fill()
+    }
+  }
+
+  private static func drawLogo(for displayMode: DisplayMode, color: NSColor) {
+    if let assetName = displayMode.logoAssetName,
+       let asset = NSImage(named: NSImage.Name(assetName))
+    {
+      let rect = NSRect(x: 6.1, y: 6.1, width: 9.8, height: 9.8)
+      asset.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+      color.setFill()
+      rect.fill(using: .sourceAtop)
+      return
+    }
+
+    let opacity = color.alphaComponent
+    color.withAlphaComponent(opacity).setStroke()
+    color.withAlphaComponent(opacity).setFill()
     switch displayMode {
     case .codex:
       drawCodexLogo(opacity: opacity)
