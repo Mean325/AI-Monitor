@@ -4,7 +4,7 @@ options:
   bundleIdPrefix: com.olivia
   deploymentTarget:
     macOS: "14.0"
-  xcodeVersion: "26.0"
+  xcodeVersion: "27.0"
 
 settings:
   base:
@@ -46,6 +46,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSUIElement: true
         NSHighResolutionCapable: true
+        NSBluetoothAlwaysUsageDescription: 用于读取 Linx68 蓝牙键盘的连接状态和电量。
         NSLocalNetworkUsageDescription: 用于将用量卡片发送到局域网内的键盘屏幕。首次运行请在系统提示中允许“本地网络”。
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -63,6 +64,7 @@ targets:
         PRODUCT_MODULE_NAME: CodexLinxDisplay
     dependencies:
       - package: Sparkle
+      - sdk: CoreBluetooth.framework
   CodexLinxPreview:
     type: tool
     platform: macOS

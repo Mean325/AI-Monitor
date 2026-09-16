@@ -58,6 +58,7 @@
 		99511856D0638A92CF6FD57C /* en.lproj in Resources */ = {isa = PBXBuildFile; fileRef = A63D919C44854AAB303C5CCE /* en.lproj */; };
 		9A1037BB537E9F2C1E52B579 /* GrokUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16C4510077F2B31FF29056C /* GrokUsageSnapshot.swift */; };
 		9D8B9F23FAE7BCD28E63D39B /* ClaudeCodeUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104FE28005328026A994385B /* ClaudeCodeUsageClientTests.swift */; };
+		9FC0117BB8A2EA47A9DA6C0C /* CoreBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2DB394AC9E5BDA014E0FF0A6 /* CoreBluetooth.framework */; };
 		A1B485CE41CF99FB78AD23FF /* QoderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21979514AAAC95FF50CD757 /* QoderCardView.swift */; };
 		AB93CD8DD8A2A1498391C35E /* ClaudeCodeUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281396CA264CDFF22FD413B5 /* ClaudeCodeUsageClient.swift */; };
 		ADF81ABFA77D5C3F11B23C73 /* QoderUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EFEC580A7F539192781A3E /* QoderUsageSnapshot.swift */; };
@@ -100,6 +101,7 @@
 		27519CC2F435B5DB276ACC36 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		281396CA264CDFF22FD413B5 /* ClaudeCodeUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeUsageClient.swift; sourceTree = "<group>"; };
 		2C0841751F3ED1CE4165FFF7 /* QoderLogClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderLogClient.swift; sourceTree = "<group>"; };
+		2DB394AC9E5BDA014E0FF0A6 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		34EFEC580A7F539192781A3E /* QoderUsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderUsageSnapshot.swift; sourceTree = "<group>"; };
 		3D90BA27FA03BABD87C39173 /* ClaudeCodeUsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeUsageSnapshot.swift; sourceTree = "<group>"; };
 		495CC8E469ADC7965E6BAAD1 /* CodexActivityState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexActivityState.swift; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F354EE36F5CD41CEF17BE59A /* Sparkle in Frameworks */,
+				9FC0117BB8A2EA47A9DA6C0C /* CoreBluetooth.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -216,6 +219,7 @@
 				369EB19ED7C337CA57E9609E /* Resources */,
 				95B6FE6A0AF26F19F07D3B1C /* Shared */,
 				04330F53A8AEB47BB6776726 /* Tests */,
+				ED82D13B7E3ECC060B4B9010 /* Frameworks */,
 				4ACF797FA7096EE9FC07B331 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -272,6 +276,14 @@
 				C814D7BD1845B7EA2DA66627 /* Version.xcconfig */,
 			);
 			path = Config;
+			sourceTree = "<group>";
+		};
+		ED82D13B7E3ECC060B4B9010 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				2DB394AC9E5BDA014E0FF0A6 /* CoreBluetooth.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -339,7 +351,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 				};
 			};

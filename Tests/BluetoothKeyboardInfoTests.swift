@@ -54,4 +54,39 @@ final class BluetoothKeyboardInfoTests: XCTestCase {
       )
     )
   }
+
+  func testParsesConnectedLinxKeyboardWithoutSystemProfilerBattery() throws {
+    let data = try XCTUnwrap(
+      """
+      {
+        "SPBluetoothDataType": [{
+          "device_connected": [{
+            "Linx68 BT-1": {
+              "device_address": "CC:3D:60:35:E6:1E",
+              "device_minorType": "Keyboard",
+              "device_services": "0x400020 < HID BLE >"
+            }
+          }]
+        }]
+      }
+      """.data(using: .utf8)
+    )
+
+    XCTAssertEqual(
+      BluetoothKeyboardInfoReader.parse(data),
+      BluetoothKeyboardInfo(
+        name: "Linx68 BT-1",
+        isConnected: true,
+        batteryPercent: nil,
+        address: "CC:3D:60:35:E6:1E"
+      )
+    )
+  }
+
+  func testParsesBluetoothBatteryCharacteristic() {
+    XCTAssertEqual(BluetoothBatteryLevelReader.parseBatteryLevel(Data([87])), 87)
+    XCTAssertEqual(BluetoothBatteryLevelReader.parseBatteryLevel(Data([0])), 0)
+    XCTAssertNil(BluetoothBatteryLevelReader.parseBatteryLevel(Data()))
+    XCTAssertNil(BluetoothBatteryLevelReader.parseBatteryLevel(Data([101])))
+  }
 }
