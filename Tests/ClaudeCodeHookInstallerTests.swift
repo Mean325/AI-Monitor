@@ -86,6 +86,9 @@ final class ClaudeCodeHookInstallerTests: XCTestCase {
     let configURL = root.appendingPathComponent(".claude/settings.json")
     let handlerURL = root.appendingPathComponent("hooks/claude-code-activity-hook.py")
     let activityDirectory = root.appendingPathComponent("claude-activity", isDirectory: true)
+    let claudeConfigDirectory = root.appendingPathComponent(".claude", isDirectory: true)
+    let transcriptURL = claudeConfigDirectory
+      .appendingPathComponent("projects/test/session-1.jsonl")
     defer { try? FileManager.default.removeItem(at: root) }
 
     let installer = ClaudeCodeHookInstaller(configURL: configURL, handlerURL: handlerURL)
@@ -100,14 +103,23 @@ final class ClaudeCodeHookInstallerTests: XCTestCase {
       process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
       process.arguments = [handlerURL.path]
       process.environment = ProcessInfo.processInfo.environment.merging(
-        ["CODEX_LINX_ACTIVITY_DIR": activityDirectory.path],
+        [
+          "CODEX_LINX_ACTIVITY_DIR": activityDirectory.path,
+          "CLAUDE_CONFIG_DIR": claudeConfigDirectory.path,
+        ],
         uniquingKeysWith: { _, testValue in testValue }
       )
       process.standardInput = input
       process.standardOutput = FileHandle.nullDevice
       process.standardError = FileHandle.nullDevice
       try process.run()
-      try input.fileHandleForWriting.write(contentsOf: Data(payload.utf8))
+      var event = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+      )
+      event["transcript_path"] = transcriptURL.path
+      try input.fileHandleForWriting.write(
+        contentsOf: JSONSerialization.data(withJSONObject: event)
+      )
       try input.fileHandleForWriting.close()
       process.waitUntilExit()
       XCTAssertEqual(process.terminationStatus, 0)
@@ -127,6 +139,7 @@ final class ClaudeCodeHookInstallerTests: XCTestCase {
     XCTAssertEqual(running.sessionID, "session-1")
     XCTAssertEqual(running.turnID, "prompt-1")
     XCTAssertEqual(running.schemaVersion, 2)
+    XCTAssertEqual(running.source, "claudeCode")
 
     let auth = try runHook(
       #"{"hook_event_name":"PermissionRequest","session_id":"session-1","prompt_id":"prompt-2"}"#
@@ -150,15 +163,23 @@ final class ClaudeCodeHookInstallerTests: XCTestCase {
     endProcess.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
     endProcess.arguments = [handlerURL.path]
     endProcess.environment = ProcessInfo.processInfo.environment.merging(
-      ["CODEX_LINX_ACTIVITY_DIR": activityDirectory.path],
+      [
+        "CODEX_LINX_ACTIVITY_DIR": activityDirectory.path,
+        "CLAUDE_CONFIG_DIR": claudeConfigDirectory.path,
+      ],
       uniquingKeysWith: { _, testValue in testValue }
     )
     endProcess.standardInput = endInput
     endProcess.standardOutput = FileHandle.nullDevice
     endProcess.standardError = FileHandle.nullDevice
     try endProcess.run()
+    let endPayload: [String: Any] = [
+      "hook_event_name": "SessionEnd",
+      "session_id": "session-1",
+      "transcript_path": transcriptURL.path,
+    ]
     try endInput.fileHandleForWriting.write(
-      contentsOf: Data(#"{"hook_event_name":"SessionEnd","session_id":"session-1"}"#.utf8)
+      contentsOf: JSONSerialization.data(withJSONObject: endPayload)
     )
     try endInput.fileHandleForWriting.close()
     endProcess.waitUntilExit()
@@ -168,5 +189,37 @@ final class ClaudeCodeHookInstallerTests: XCTestCase {
       includingPropertiesForKeys: nil
     )) ?? []
     XCTAssertTrue(remaining.filter { $0.pathExtension == "json" }.isEmpty)
+  }
+
+  func testHookIgnoresCompatibleEventsWithoutClaudeTranscript() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent("claude-hook-source-\(UUID().uuidString)", isDirectory: true)
+    let configURL = root.appendingPathComponent(".claude/settings.json")
+    let handlerURL = root.appendingPathComponent("hooks/claude-code-activity-hook.py")
+    let activityDirectory = root.appendingPathComponent("claude-activity", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let installer = ClaudeCodeHookInstaller(configURL: configURL, handlerURL: handlerURL)
+    try installer.install()
+
+    let process = Process()
+    let input = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+    process.arguments = [handlerURL.path]
+    process.environment = ProcessInfo.processInfo.environment.merging(
+      ["CODEX_LINX_ACTIVITY_DIR": activityDirectory.path],
+      uniquingKeysWith: { _, testValue in testValue }
+    )
+    process.standardInput = input
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try process.run()
+    let payload = #"{"hook_event_name":"PostToolUse","session_id":"foreign-session","transcript_path":"/tmp/.codex/sessions/foreign.jsonl"}"#
+    try input.fileHandleForWriting.write(contentsOf: Data(payload.utf8))
+    try input.fileHandleForWriting.close()
+    process.waitUntilExit()
+
+    XCTAssertEqual(process.terminationStatus, 0)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: activityDirectory.path))
   }
 }

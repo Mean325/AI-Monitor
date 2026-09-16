@@ -88,6 +88,84 @@ final class AppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testSmartSwitchMonitorsAllProvidersAndRestoresPreferredDisplay() throws {
+    let suite = "SmartSwitchTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(false, forKey: "linxEnabled")
+    let codex = FakeCodexActivityMonitor()
+    let claude = FakeCodexActivityMonitor()
+    let qoder = FakeCodexActivityMonitor()
+    let grok = FakeCodexActivityMonitor()
+    let model = AppModel(
+      defaults: defaults,
+      activityMonitor: codex,
+      claudeActivityMonitor: claude,
+      qoderActivityMonitor: qoder,
+      grokActivityMonitor: grok
+    )
+
+    model.start()
+    model.setSmartSwitchEnabled(true)
+
+    XCTAssertTrue(codex.isStarted)
+    XCTAssertTrue(claude.isStarted)
+    XCTAssertTrue(qoder.isStarted)
+    XCTAssertTrue(grok.isStarted)
+    XCTAssertTrue(defaults.bool(forKey: "smartSwitchEnabled"))
+
+    claude.send(.running)
+    XCTAssertEqual(model.displayMode, .claudeCode)
+    XCTAssertTrue(model.isSmartSwitchActive)
+
+    grok.send(.awaitingAuthorization)
+    XCTAssertEqual(model.displayMode, .grok)
+    XCTAssertEqual(model.presentedAIMode, .grok)
+
+    qoder.send(.toolFailed)
+    XCTAssertEqual(model.displayMode, .qoder)
+
+    qoder.send(.idle)
+    XCTAssertEqual(model.displayMode, .grok)
+    grok.send(.idle)
+    XCTAssertEqual(model.displayMode, .claudeCode)
+    claude.send(.finished)
+    XCTAssertEqual(model.displayMode, .codex)
+    XCTAssertFalse(model.isSmartSwitchActive)
+  }
+
+  @MainActor
+  func testDisablingSmartSwitchRestoresDisplayAndSelectedOnlyMonitoring() throws {
+    let suite = "SmartSwitchDisableTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(false, forKey: "linxEnabled")
+    let codex = FakeCodexActivityMonitor()
+    let claude = FakeCodexActivityMonitor()
+    let qoder = FakeCodexActivityMonitor()
+    let grok = FakeCodexActivityMonitor()
+    let model = AppModel(
+      defaults: defaults,
+      activityMonitor: codex,
+      claudeActivityMonitor: claude,
+      qoderActivityMonitor: qoder,
+      grokActivityMonitor: grok
+    )
+
+    model.start()
+    model.setSmartSwitchEnabled(true)
+    claude.send(.running)
+    XCTAssertEqual(model.displayMode, .claudeCode)
+
+    model.setSmartSwitchEnabled(false)
+    XCTAssertEqual(model.displayMode, .codex)
+    XCTAssertFalse(model.isSmartSwitchActive)
+    XCTAssertTrue(codex.isStarted)
+    XCTAssertFalse(claude.isStarted)
+    XCTAssertFalse(defaults.bool(forKey: "smartSwitchEnabled"))
+  }
+
+  @MainActor
   func testAISelectionSurvivesCustomImageModeAndRelaunch() throws {
     let suite = "AISelectionTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

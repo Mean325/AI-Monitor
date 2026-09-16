@@ -35,6 +35,7 @@ struct CodexActivityRecord: Codable, Equatable, Sendable {
   let eventName: String
   let state: CodexActivityState
   let updatedAt: Date
+  var source: String? = nil
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion
@@ -43,6 +44,7 @@ struct CodexActivityRecord: Codable, Equatable, Sendable {
     case eventName
     case state
     case updatedAt
+    case source
   }
 }
 

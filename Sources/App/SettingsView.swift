@@ -816,6 +816,40 @@ struct SettingsView: View {
         symbol: "circle.grid.2x2.fill",
         tint: .indigo
       ) {
+        settingRow(
+          title: "智能切换与异常抢占",
+          subtitle: "运行任务自动上屏；工具失败和等待授权优先显示，结束后恢复原画面"
+        ) {
+          Toggle(
+            "智能切换与异常抢占",
+            isOn: Binding(
+              get: { model.smartSwitchEnabled },
+              set: { model.setSmartSwitchEnabled($0) }
+            )
+          )
+          .labelsHidden()
+          .toggleStyle(.switch)
+          .tint(systemAccent)
+        }
+
+        if model.smartSwitchEnabled {
+          HStack(spacing: 7) {
+            Image(systemName: model.isSmartSwitchActive ? "bolt.fill" : "eye.fill")
+              .foregroundStyle(model.isSmartSwitchActive ? .orange : systemAccent)
+            Text(
+              model.isSmartSwitchActive
+                ? "正在抢占：\(model.presentedAIMode.title)"
+                : "正在监听全部 AI，当前保持 \(model.selectedAIMode.title)"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            Spacer()
+          }
+          .padding(.horizontal, 2)
+        }
+
+        Divider().opacity(0.5)
+
         Text("当前 AI")
           .font(.caption).foregroundStyle(.secondary)
         AppGlassGroup {
@@ -844,7 +878,7 @@ struct SettingsView: View {
         if model.showTaskStatusInMenuBar {
           HStack {
             Image(nsImage: TaskTrafficLight.makeImage(
-              state: model.selectedActivityState, mode: model.selectedAIMode))
+              state: model.selectedActivityState, mode: model.presentedAIMode))
             Text(model.taskStatusDescription).font(.caption)
           }
           Text("红灯等待授权/失败 · 黄灯进行中 · 绿灯完成/空闲。")
@@ -1773,7 +1807,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
   var searchKeywords: String {
     switch self {
-    case .monitoring: return "Codex Claude Qoder Grok AI 菜单栏 Hook 任务 状态"
+    case .monitoring: return "Codex Claude Qoder Grok AI 菜单栏 Hook 任务 状态 智能切换 自动 抢占 异常"
     case .linx: return "键盘 图片 预览 颜色 主题 蓝牙 电量 同步 接口 刷新 推送"
     case .general: return "启动 登录 版本 更新 关于"
     }

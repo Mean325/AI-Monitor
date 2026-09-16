@@ -35,7 +35,7 @@ struct CodexLinxDisplayApp: App {
       MenuBarStatusLabel(
         title: menuBarTitle,
         connectionState: model.keyboardConnectionState,
-        displayMode: model.selectedAIMode,
+        displayMode: model.presentedAIMode,
         showTaskStatus: model.showTaskStatusInMenuBar,
         showUsage: model.showUsageInMenuBar,
         remainingPercent: model.selectedUsageRemainingPercent,

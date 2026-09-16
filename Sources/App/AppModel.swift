@@ -75,6 +75,55 @@ enum UsageQueryState: Equatable {
   case failed
 }
 
+enum SmartDisplayResolver {
+  static func preferredMode(
+    states: [(mode: DisplayMode, state: CodexActivityState, eventDate: Date?)],
+    currentMode: DisplayMode,
+    preferredMode: DisplayMode
+  ) -> DisplayMode? {
+    states
+      .filter { takeoverPriority(for: $0.state) > 0 }
+      .max { lhs, rhs in
+        comparisonKey(for: lhs, currentMode: currentMode, preferredMode: preferredMode)
+          < comparisonKey(for: rhs, currentMode: currentMode, preferredMode: preferredMode)
+      }?
+      .mode
+  }
+
+  private static func takeoverPriority(for state: CodexActivityState) -> Int {
+    switch state {
+    case .toolFailed: return 3
+    case .awaitingAuthorization: return 2
+    case .running: return 1
+    case .finished, .idle: return 0
+    }
+  }
+
+  private static func comparisonKey(
+    for candidate: (mode: DisplayMode, state: CodexActivityState, eventDate: Date?),
+    currentMode: DisplayMode,
+    preferredMode: DisplayMode
+  ) -> (Int, Int, TimeInterval, Int, Int) {
+    (
+      takeoverPriority(for: candidate.state),
+      candidate.mode == currentMode ? 1 : 0,
+      candidate.eventDate?.timeIntervalSinceReferenceDate ?? 0,
+      candidate.mode == preferredMode ? 1 : 0,
+      stableOrder(candidate.mode)
+    )
+  }
+
+  private static func stableOrder(_ mode: DisplayMode) -> Int {
+    switch mode {
+    case .codex: return 4
+    case .claudeCode: return 3
+    case .qoder: return 2
+    case .grok: return 1
+    case .customImage: return 0
+    }
+  }
+}
+
 struct HTTPPushRequestRecord: Equatable, Sendable {
   enum Outcome: Equatable, Sendable {
     case pending
@@ -118,6 +167,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var isLinxEnabled: Bool
   @Published private(set) var bluetoothKeyboardInfo: BluetoothKeyboardInfo?
   @Published private(set) var lastPushRequest: HTTPPushRequestRecord?
+  @Published private(set) var smartSwitchEnabled: Bool
 
   @Published var showTaskStatusInMenuBar: Bool {
     didSet {
@@ -139,7 +189,7 @@ final class AppModel: ObservableObject {
   }
 
   var selectedActivityState: CodexActivityState? {
-    switch selectedAIMode {
+    switch presentedAIMode {
     case .codex: return codexActivityState
     case .claudeCode: return claudeActivityState
     case .qoder: return qoderActivityState
@@ -149,7 +199,7 @@ final class AppModel: ObservableObject {
   }
 
   var selectedUsageRemainingPercent: Int? {
-    switch selectedAIMode {
+    switch presentedAIMode {
     case .codex: return snapshot?.remainingPercent
     case .claudeCode: return nil
     case .qoder: return qoderCreditSnapshot?.remainingPercent
@@ -159,10 +209,32 @@ final class AppModel: ObservableObject {
   }
 
   var taskStatusDescription: String {
-    "\(selectedAIMode.title) · \(selectedActivityState?.title ?? "未选择 AI")"
+    let prefix = isSmartSwitchActive ? "智能切换 · " : ""
+    return "\(prefix)\(presentedAIMode.title) · \(selectedActivityState?.title ?? "未选择 AI")"
+  }
+
+  var presentedAIMode: DisplayMode {
+    isSmartSwitchActive ? displayMode : selectedAIMode
+  }
+
+  var isSmartSwitchActive: Bool {
+    smartSwitchReturnMode != nil
   }
 
   func refreshSelectedActivity() {
+    if smartSwitchEnabled {
+      activityMonitor.refresh()
+      claudeActivityMonitor.refresh()
+      qoderActivityMonitor.refresh()
+      grokActivityMonitor.refresh()
+      applyCodexActivity(activityMonitor.state)
+      updateClaudeActivity(claudeActivityMonitor.state)
+      updateQoderActivity(qoderActivityMonitor.state)
+      updateGrokActivity(grokActivityMonitor.state)
+      reevaluateSmartDisplayMode()
+      return
+    }
+
     // Read a fresh snapshot even if the monitor has not emitted a change event.
     switch displayMode {
     case .codex:
@@ -233,6 +305,8 @@ final class AppModel: ObservableObject {
   private var customSourceImage: NSImage?
   private var hasStarted = false
   private var activeAIMonitor: DisplayMode?
+  private var monitorsFollowAllProviders = false
+  private var smartSwitchReturnMode: DisplayMode?
   private let localNetworkRetryDelayNanoseconds: UInt64
   private let localNetworkRetryWindowNanoseconds: UInt64
   private var didProbeLocalNetwork = false
@@ -258,11 +332,16 @@ final class AppModel: ObservableObject {
   ) {
     let resolvedActivityMonitor = activityMonitor ?? CodexActivityMonitor()
     let resolvedClaudeActivityMonitor = claudeActivityMonitor
-      ?? CodexActivityMonitor(directoryURL: Self.defaultClaudeActivityDirectoryURL, sessionsDirectoryURL: nil)
+      ?? CodexActivityMonitor(
+        directoryURL: Self.defaultClaudeActivityDirectoryURL,
+        sessionsDirectoryURL: nil,
+        requiredSource: "claudeCode"
+      )
     let resolvedQoderActivityMonitor = qoderActivityMonitor ?? QoderActivityMonitor()
     let resolvedGrokActivityMonitor = grokActivityMonitor ?? GrokActivityMonitor()
     self.defaults = defaults
     isLinxEnabled = defaults.object(forKey: Keys.linxEnabled) as? Bool ?? true
+    smartSwitchEnabled = defaults.bool(forKey: Keys.smartSwitchEnabled)
     showTaskStatusInMenuBar = defaults.bool(forKey: "showTaskStatusInMenuBar")
     showUsageInMenuBar = defaults.object(forKey: "showUsageInMenuBar") as? Bool ?? true
     menuBarOriginalIconPosition = MenuBarOriginalIconPosition(
@@ -391,7 +470,8 @@ final class AppModel: ObservableObject {
       self?.handleGrokActivityChange(state)
     }
     grokActivityState = grokActivityMonitor.state
-    activateSelectedMonitor()
+    reconcileActivityMonitors()
+    reevaluateSmartDisplayMode()
     updatePreview()
     startBluetoothKeyboardMonitoring()
 
@@ -513,12 +593,26 @@ final class AppModel: ObservableObject {
       selectedAIMode = mode
       defaults.set(mode.rawValue, forKey: "selectedAIMode")
     }
+    if smartSwitchReturnMode != nil {
+      smartSwitchReturnMode = mode
+      defaults.set(mode.rawValue, forKey: Keys.displayMode)
+      reconcileActivityMonitors()
+      reevaluateSmartDisplayMode()
+      return
+    }
+    applyDisplayMode(mode, persist: true)
+    reevaluateSmartDisplayMode()
+  }
+
+  private func applyDisplayMode(_ mode: DisplayMode, persist: Bool) {
     guard displayMode != mode else { return }
 
     displayMode = mode
-    activateSelectedMonitor()
+    reconcileActivityMonitors()
     refreshSelectedActivity()
-    defaults.set(mode.rawValue, forKey: Keys.displayMode)
+    if persist {
+      defaults.set(mode.rawValue, forKey: Keys.displayMode)
+    }
     lastUploadedHash = nil
     lastError = nil
     schedulerTask?.cancel()
@@ -557,12 +651,51 @@ final class AppModel: ObservableObject {
     guard mode.isUsageMode else { return }
     selectedAIMode = mode
     defaults.set(mode.rawValue, forKey: "selectedAIMode")
-    if displayMode.isUsageMode { setDisplayMode(mode) }
-    activateSelectedMonitor()
+    if let returnMode = smartSwitchReturnMode, returnMode.isUsageMode {
+      smartSwitchReturnMode = mode
+      defaults.set(mode.rawValue, forKey: Keys.displayMode)
+    } else if smartSwitchReturnMode == nil, displayMode.isUsageMode {
+      applyDisplayMode(mode, persist: true)
+    }
+    reconcileActivityMonitors()
+    reevaluateSmartDisplayMode()
   }
 
-  private func activateSelectedMonitor() {
-    guard hasStarted, activeAIMonitor != selectedAIMode else { return }
+  func setSmartSwitchEnabled(_ enabled: Bool) {
+    guard smartSwitchEnabled != enabled else { return }
+    smartSwitchEnabled = enabled
+    defaults.set(enabled, forKey: Keys.smartSwitchEnabled)
+
+    if !enabled, let returnMode = smartSwitchReturnMode {
+      smartSwitchReturnMode = nil
+      applyDisplayMode(returnMode, persist: true)
+    }
+    reconcileActivityMonitors()
+    if enabled {
+      refreshSelectedActivity()
+      reevaluateSmartDisplayMode()
+    }
+  }
+
+  private func reconcileActivityMonitors() {
+    guard hasStarted else { return }
+    if smartSwitchEnabled {
+      guard !monitorsFollowAllProviders else { return }
+      monitorsFollowAllProviders = true
+      activeAIMonitor = nil
+      activityMonitor.stop()
+      claudeActivityMonitor.stop()
+      qoderActivityMonitor.stop()
+      grokActivityMonitor.stop()
+      activityMonitor.start()
+      claudeActivityMonitor.start()
+      qoderActivityMonitor.start()
+      grokActivityMonitor.start()
+      return
+    }
+
+    guard monitorsFollowAllProviders || activeAIMonitor != selectedAIMode else { return }
+    monitorsFollowAllProviders = false
     activityMonitor.stop()
     claudeActivityMonitor.stop()
     qoderActivityMonitor.stop()
@@ -582,6 +715,30 @@ final class AppModel: ObservableObject {
       grokActivityMonitor.start()
       grokActivityState = grokActivityMonitor.state
     case .customImage: break
+    }
+  }
+
+  private func reevaluateSmartDisplayMode() {
+    guard smartSwitchEnabled else { return }
+    let candidate = SmartDisplayResolver.preferredMode(
+      states: [
+        (.codex, codexActivityState, activityMonitor.lastEventDate),
+        (.claudeCode, claudeActivityState, claudeActivityMonitor.lastEventDate),
+        (.qoder, qoderActivityState, qoderActivityMonitor.lastEventDate),
+        (.grok, grokActivityState, grokActivityMonitor.lastEventDate),
+      ],
+      currentMode: displayMode,
+      preferredMode: selectedAIMode
+    )
+
+    if let candidate {
+      if smartSwitchReturnMode == nil {
+        smartSwitchReturnMode = displayMode
+      }
+      applyDisplayMode(candidate, persist: false)
+    } else if let returnMode = smartSwitchReturnMode {
+      smartSwitchReturnMode = nil
+      applyDisplayMode(returnMode, persist: true)
     }
   }
 
@@ -993,7 +1150,10 @@ final class AppModel: ObservableObject {
     let resolved = snapshot?.isQuotaExhausted == true ? .toolFailed : state
     guard codexActivityState != resolved else { return }
     codexActivityState = resolved
+    let previousMode = displayMode
+    reevaluateSmartDisplayMode()
     updatePreview()
+    guard displayMode == previousMode else { return }
     guard uploadIfChanged, hasStarted, isLinxEnabled, displayMode == .codex else { return }
     scheduleCodexActivityUpload()
   }
@@ -1068,29 +1228,56 @@ final class AppModel: ObservableObject {
   }
 
   private func handleClaudeActivityChange(_ state: CodexActivityState) {
+    updateClaudeActivity(state, uploadIfChanged: true)
+  }
+
+  private func updateClaudeActivity(
+    _ state: CodexActivityState,
+    uploadIfChanged: Bool = false
+  ) {
     guard claudeActivityState != state else { return }
     claudeActivityState = state
+    let previousMode = displayMode
+    reevaluateSmartDisplayMode()
     updatePreview()
-
-    guard hasStarted, isLinxEnabled, displayMode == .claudeCode else { return }
+    guard displayMode == previousMode else { return }
+    guard uploadIfChanged, hasStarted, isLinxEnabled, displayMode == .claudeCode else { return }
     scheduleClaudeActivityUpload()
   }
 
   private func handleQoderActivityChange(_ state: CodexActivityState) {
+    updateQoderActivity(state, uploadIfChanged: true)
+  }
+
+  private func updateQoderActivity(
+    _ state: CodexActivityState,
+    uploadIfChanged: Bool = false
+  ) {
     guard qoderActivityState != state else { return }
     qoderActivityState = state
+    let previousMode = displayMode
+    reevaluateSmartDisplayMode()
     updatePreview()
-
-    guard hasStarted, isLinxEnabled, displayMode == .qoder else { return }
+    guard displayMode == previousMode else { return }
+    guard uploadIfChanged, hasStarted, isLinxEnabled, displayMode == .qoder else { return }
     scheduleQoderActivityUpload()
   }
 
   private func handleGrokActivityChange(_ state: CodexActivityState) {
+    updateGrokActivity(state, uploadIfChanged: true)
+  }
+
+  private func updateGrokActivity(
+    _ state: CodexActivityState,
+    uploadIfChanged: Bool = false
+  ) {
     guard grokActivityState != state else { return }
     grokActivityState = state
+    let previousMode = displayMode
+    reevaluateSmartDisplayMode()
     updatePreview()
-
-    guard hasStarted, isLinxEnabled, displayMode == .grok else { return }
+    guard displayMode == previousMode else { return }
+    guard uploadIfChanged, hasStarted, isLinxEnabled, displayMode == .grok else { return }
     scheduleGrokActivityUpload()
   }
 
@@ -1506,6 +1693,7 @@ final class AppModel: ObservableObject {
 
   private enum Keys {
     static let linxEnabled = "linxEnabled"
+    static let smartSwitchEnabled = "smartSwitchEnabled"
     static let endpoint = "imageAPIEndpoint"
     static let refreshInterval = "refreshIntervalSeconds"
     static let safeAreaHeight = "safeAreaHeight"

@@ -191,6 +191,54 @@ final class CodexActivityTests: XCTestCase {
   }
 
   @MainActor
+  func testMonitorCanIgnoreRecordsFromAnotherHookSource() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("source-filter-monitor-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let foreignRecord = CodexActivityRecord(
+      schemaVersion: 2,
+      sessionID: "foreign",
+      turnID: "turn",
+      eventName: "PostToolUse",
+      state: .running,
+      updatedAt: Date(),
+      source: nil
+    )
+    try encoder.encode(foreignRecord).write(
+      to: directory.appendingPathComponent("foreign.json"),
+      options: .atomic
+    )
+
+    let monitor = CodexActivityMonitor(
+      directoryURL: directory,
+      sessionsDirectoryURL: nil,
+      requiredSource: "claudeCode"
+    )
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .idle)
+
+    let claudeRecord = CodexActivityRecord(
+      schemaVersion: 2,
+      sessionID: "claude",
+      turnID: "turn",
+      eventName: "UserPromptSubmit",
+      state: .running,
+      updatedAt: Date(),
+      source: "claudeCode"
+    )
+    try encoder.encode(claudeRecord).write(
+      to: directory.appendingPathComponent("claude.json"),
+      options: .atomic
+    )
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .running)
+  }
+
+  @MainActor
   func testMonitorAutomaticallyPublishesAtomicActivityRecords() async throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("codex-activity-monitor-\(UUID().uuidString)", isDirectory: true)

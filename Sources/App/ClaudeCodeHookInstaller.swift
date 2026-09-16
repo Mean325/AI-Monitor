@@ -171,6 +171,20 @@ STATE_BY_EVENT = {
 }
 
 
+def is_claude_transcript(value):
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        transcript = Path(value).expanduser().resolve()
+        config_root = Path(
+            os.environ.get("CLAUDE_CONFIG_DIR", str(Path.home() / ".claude"))
+        ).expanduser().resolve()
+        transcript.relative_to(config_root / "projects")
+        return True
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
 def main():
     try:
         event = json.load(sys.stdin)
@@ -182,6 +196,11 @@ def main():
     event_name = event.get("hook_event_name")
     session_id = event.get("session_id")
     if not isinstance(event_name, str) or not isinstance(session_id, str) or not session_id:
+        return 0
+    # Codex and other agents may emit a Claude-compatible hook payload. Only
+    # accept events backed by a real Claude Code project transcript so those
+    # tools cannot leave Claude permanently marked as running.
+    if not is_claude_transcript(event.get("transcript_path")):
         return 0
 
     if event_name == "SessionEnd":
@@ -218,6 +237,7 @@ def main():
         "eventName": event_name,
         "state": state,
         "updatedAt": time.time(),
+        "source": "claudeCode",
     }
     turn_id = event.get("turn_id")
     if not (isinstance(turn_id, str) and turn_id):

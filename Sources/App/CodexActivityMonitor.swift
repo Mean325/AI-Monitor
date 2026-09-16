@@ -31,6 +31,7 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
   private let staleInterval: TimeInterval
   private let completedHoldInterval: TimeInterval
   private let orphanedHookGraceInterval: TimeInterval
+  private let requiredSource: String?
   private let fileManager: FileManager
   private let sessionLogReader: CodexSessionLogActivityReader?
   private let eventQueue = DispatchQueue(
@@ -47,12 +48,14 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
     staleInterval: TimeInterval = 12 * 60 * 60,
     completedHoldInterval: TimeInterval = 10,
     orphanedHookGraceInterval: TimeInterval = 2 * 60,
+    requiredSource: String? = nil,
     fileManager: FileManager = .default
   ) {
     self.directoryURL = directoryURL
     self.staleInterval = staleInterval
     self.completedHoldInterval = completedHoldInterval
     self.orphanedHookGraceInterval = orphanedHookGraceInterval
+    self.requiredSource = requiredSource
     self.fileManager = fileManager
     self.sessionLogReader = sessionsDirectoryURL.map {
       CodexSessionLogActivityReader(directoryURL: $0, fileManager: fileManager)
@@ -102,7 +105,11 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
       .filter { $0.pathExtension == "json" }
       .compactMap { url -> CodexActivityRecord? in
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? decoder.decode(CodexActivityRecord.self, from: data)
+        guard let record = try? decoder.decode(CodexActivityRecord.self, from: data) else {
+          return nil
+        }
+        guard requiredSource == nil || record.source == requiredSource else { return nil }
+        return record
       }
       ?? []
 
