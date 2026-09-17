@@ -401,6 +401,7 @@ enum SettingsWindowPresenter {
   }
 
   static func isSettingsWindow(_ window: NSWindow) -> Bool {
+    if window.identifier?.rawValue == "ai-monitor-settings" { return true }
     let title = window.title.lowercased()
     return title.contains("设置") || title.contains("settings")
   }

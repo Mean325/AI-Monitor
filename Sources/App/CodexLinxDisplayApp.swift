@@ -4,6 +4,7 @@ import SwiftUI
 @main
 @MainActor
 struct CodexLinxDisplayApp: App {
+  @Environment(\.openSettings) private var openSettings
   @StateObject private var model: AppModel
   private let updater: UpdaterController
 
@@ -42,7 +43,14 @@ struct CodexLinxDisplayApp: App {
         iconPosition: model.menuBarOriginalIconPosition,
         activityState: model.selectedActivityState
       )
-      .task { model.start() }
+      .task {
+        model.start()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--show-settings") {
+          SettingsWindowPresenter.show(using: openSettings)
+        }
+        #endif
+      }
     }
     .menuBarExtraStyle(.window)
 

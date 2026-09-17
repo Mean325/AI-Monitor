@@ -361,7 +361,7 @@ final class AppModelTests: XCTestCase {
     let frame = SettingsPreviewPlacement.frame(
       owner: owner, size: NSSize(width: 188, height: 520), screen: screen)
     XCTAssertEqual(frame.minX, owner.maxX + 12)
-    XCTAssertEqual(frame.maxY, owner.maxY - 52)
+    XCTAssertEqual(frame.minY, owner.minY)
     XCTAssertFalse(frame.intersects(owner))
   }
 
@@ -381,6 +381,15 @@ final class AppModelTests: XCTestCase {
     let frame = SettingsPreviewPlacement.frame(
       owner: owner, size: NSSize(width: 188, height: 580), screen: screen)
     XCTAssertEqual(frame.minX, owner.maxX + 12)
+    XCTAssertEqual(frame.minY, owner.minY)
+    XCTAssertTrue(screen.contains(frame))
+  }
+
+  func testSettingsPreviewClampsToScreenWhenOwnerBottomIsOffscreen() {
+    let screen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let owner = NSRect(x: 200, y: -50, width: 760, height: 660)
+    let frame = SettingsPreviewPlacement.frame(
+      owner: owner, size: NSSize(width: 188, height: 480), screen: screen)
     XCTAssertEqual(frame.minY, screen.minY)
     XCTAssertTrue(screen.contains(frame))
   }
@@ -399,6 +408,10 @@ final class AppModelTests: XCTestCase {
     XCTAssertTrue(SettingsWindowPresenter.isSettingsWindow(chineseWindow))
     XCTAssertTrue(SettingsWindowPresenter.isSettingsWindow(englishWindow))
     XCTAssertFalse(SettingsWindowPresenter.isSettingsWindow(unrelatedWindow))
+    let paneWindow = NSWindow()
+    paneWindow.title = "连接与同步"
+    paneWindow.identifier = NSUserInterfaceItemIdentifier("ai-monitor-settings")
+    XCTAssertTrue(SettingsWindowPresenter.isSettingsWindow(paneWindow))
   }
 
   @MainActor

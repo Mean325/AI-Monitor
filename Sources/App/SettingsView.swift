@@ -4,6 +4,20 @@ import UniformTypeIdentifiers
 
 private enum SettingsChrome {
   static let cornerRadius: CGFloat = 16
+  static let previewInset: CGFloat = 12
+  static let previewWidth = UsageCardLayout.width + previewInset * 2
+}
+
+private enum SettingsPage: Equatable {
+  case pane(SettingsPane)
+  case connection
+
+  var pane: SettingsPane {
+    switch self {
+    case .pane(let pane): return pane
+    case .connection: return .linx
+    }
+  }
 }
 
 struct SettingsView: View {
@@ -13,12 +27,11 @@ struct SettingsView: View {
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  @State private var selectedPane: SettingsPane = .monitoring
-  @State private var selectedLinxPane = 0
+  @State private var selectedPage: SettingsPage = .pane(.monitoring)
   @State private var searchText = ""
   @State private var hoveredPane: SettingsPane?
-  @State private var backHistory: [SettingsPane] = []
-  @State private var forwardHistory: [SettingsPane] = []
+  @State private var backHistory: [SettingsPage] = []
+  @State private var forwardHistory: [SettingsPage] = []
   @Environment(\.controlActiveState) private var controlActiveState
   @State private var showingPushRequestDetails = false
 
@@ -33,43 +46,68 @@ struct SettingsView: View {
   ) {
     self.model = model
     self.checkForUpdates = checkForUpdates
-    _selectedPane = State(initialValue: initialPane)
+    _selectedPage = State(initialValue: .pane(initialPane))
   }
 
   var body: some View {
-    HStack(spacing: 0) {
+    NavigationSplitView {
       sidebar
-        .frame(width: 215)
-        .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.cornerRadius, style: .continuous))
-        .padding(.leading, 8)
-        .padding(.vertical, 8)
-
-      VStack(spacing: 0) {
-        navigationBar
-        detailBody
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 232, maxWidth: 232)
+        .navigationSplitViewColumnWidth(min: 232, ideal: 232, max: 232)
+        .toolbar(removing: .sidebarToggle)
+    } detail: {
+      detailBody
+        .navigationTitle(selectedPage == .connection ? "连接与同步" : selectedPane.title)
+        .toolbar {
+          ToolbarItem(placement: .navigation) {
+            ControlGroup {
+              Button {
+                guard let page = backHistory.popLast() else { return }
+                forwardHistory.append(selectedPage)
+                selectedPage = page
+              } label: {
+                Label("返回", systemImage: "chevron.backward")
+                  .font(.system(size: 17, weight: .medium))
+                  .frame(width: 22, height: 24)
+              }
+              .disabled(backHistory.isEmpty)
+              .help("返回")
+              Button {
+                guard let page = forwardHistory.popLast() else { return }
+                backHistory.append(selectedPage)
+                selectedPage = page
+              } label: {
+                Label("前进", systemImage: "chevron.forward")
+                  .font(.system(size: 17, weight: .medium))
+                  .frame(width: 22, height: 24)
+              }
+              .disabled(forwardHistory.isEmpty)
+              .help("前进")
+            }
+            .controlGroupStyle(.navigation)
+            .controlSize(.large)
+            .frame(width: 74)
+          }
+        }
     }
+    .navigationSplitViewStyle(.balanced)
     .frame(minWidth: 720, idealWidth: 760, maxWidth: .infinity,
            minHeight: 600, idealHeight: 660, maxHeight: .infinity)
     .font(.system(size: 13))
-    .controlSize(.small)
+    .controlSize(.regular)
     .background(detailCanvasBackground)
-    .toolbar(.hidden, for: .windowToolbar)
-    .toolbarBackground(.hidden, for: .windowToolbar)
-    .background(SettingsWindowConfigurator(pane: selectedPane))
+    .background(SettingsWindowConfigurator(title: selectedPage == .connection ? "连接与同步" : selectedPane.title))
     .background {
       SettingsPreviewCompanion(
-        isPresented: selectedPane == .linx && model.isLinxEnabled && selectedLinxPane == 0,
+        isPresented: selectedPage == .pane(.linx) && model.isLinxEnabled,
         content: AnyView(previewCard
-          .frame(width: 188)
+          .frame(width: SettingsChrome.previewWidth)
           .fixedSize(horizontal: false, vertical: true)
           .font(.system(size: 13))
           .controlSize(.small)
           .environment(\.colorScheme, colorScheme))
       )
     }
-    .ignoresSafeArea(.container, edges: .top)
     .sheet(isPresented: $showingPushRequestDetails) {
       pushRequestDetails
     }
@@ -79,40 +117,13 @@ struct SettingsView: View {
     selectedPane
   }
 
-  private var navigationBar: some View {
-    HStack(spacing: 0) {
-      HStack(spacing: 0) {
-        Button {
-          guard let pane = backHistory.popLast() else { return }
-          forwardHistory.append(selectedPane)
-          selectedPane = pane
-        } label: {
-          Image(systemName: "chevron.left").frame(width: 34, height: 34)
-        }
-        .disabled(backHistory.isEmpty)
-        .help("返回")
-        .accessibilityLabel("返回")
+  private var selectedPane: SettingsPane { selectedPage.pane }
 
-        Divider().frame(height: 16).opacity(0.4)
-
-        Button {
-          guard let pane = forwardHistory.popLast() else { return }
-          backHistory.append(selectedPane)
-          selectedPane = pane
-        } label: {
-          Image(systemName: "chevron.right").frame(width: 34, height: 34)
-        }
-        .disabled(forwardHistory.isEmpty)
-        .help("前进")
-        .accessibilityLabel("前进")
-      }
-      .font(.system(size: 15, weight: .medium))
-      .buttonStyle(.plain)
-      .background(systemGroupBackground, in: Capsule())
-      Spacer()
-    }
-    .padding(.leading, 8)
-    .frame(height: 52)
+  private func navigate(to page: SettingsPage) {
+    guard selectedPage != page else { return }
+    backHistory.append(selectedPage)
+    forwardHistory.removeAll()
+    withAnimation(sidebarSelectionAnimation) { selectedPage = page }
   }
 
   private var detailBody: some View {
@@ -121,16 +132,14 @@ struct SettingsView: View {
         VStack(spacing: 10) {
           detailHeader.id("paneTop")
           detailContent
+            .controlSize(.small)
         }
         .padding(.leading, 20)
         .padding(.trailing, 20)
         .padding(.bottom, 20)
       }
       .scrollIndicators(.automatic)
-      .onChange(of: selectedPane) { _, _ in
-        proxy.scrollTo("paneTop", anchor: .top)
-      }
-      .onChange(of: selectedLinxPane) { _, _ in
+      .onChange(of: selectedPage) { _, _ in
         proxy.scrollTo("paneTop", anchor: .top)
       }
     }
@@ -138,31 +147,10 @@ struct SettingsView: View {
 
   private var sidebar: some View {
     VStack(spacing: 0) {
-      SettingsTrafficLights()
-        .frame(width: 70, height: 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 28)
-
-      HStack(spacing: 5) {
-        Image(systemName: "magnifyingglass")
-          .foregroundStyle(.secondary)
-        TextField("搜索", text: $searchText)
-          .textFieldStyle(.plain)
-          .accessibilityLabel("搜索设置")
-        if !searchText.isEmpty {
-          Button { searchText = "" } label: {
-            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel("清除搜索")
-        }
-      }
-      .padding(.horizontal, 9)
-      .frame(height: 28)
-      .background(Color.primary.opacity(0.065), in: Capsule())
+      SettingsSearchField(text: $searchText)
+      .frame(height: 30)
       .padding(.horizontal, 10)
+      .padding(.top, 8)
 
       brandHeader
 
@@ -185,7 +173,6 @@ struct SettingsView: View {
       }
       .scrollIndicators(.hidden)
     }
-    .background(sidebarBackground)
   }
 
   private var brandHeader: some View {
@@ -235,10 +222,7 @@ struct SettingsView: View {
     let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
     return Button {
-      guard selectedPane != pane else { return }
-      backHistory.append(selectedPane)
-      forwardHistory.removeAll()
-      withAnimation(sidebarSelectionAnimation) { selectedPane = pane }
+      navigate(to: .pane(pane))
     } label: {
       HStack(spacing: 7) {
         SettingsSystemIcon(kind: pane.systemIcon, size: 20)
@@ -263,49 +247,51 @@ struct SettingsView: View {
 
   private var keyboardStatusContent: some View {
     VStack(spacing: 10) {
-      statusRow(
-        title: "设备名称",
-        value: model.bluetoothKeyboardInfo?.name ?? "未发现 Linx68",
-        valueColor: bluetoothConnectionColor
-      )
-
-      Divider().opacity(0.5)
-      statusRow(
-        title: "蓝牙状态",
-        value: model.bluetoothKeyboardInfo?.isConnected == true ? "已连接" : "未连接",
-        valueColor: bluetoothConnectionColor
-      )
-
-      Divider().opacity(0.5)
-      statusRow(title: "电量", value: bluetoothBatteryText)
-
-      if let address = model.bluetoothKeyboardInfo?.address {
-        Divider().opacity(0.5)
-        statusRow(title: "设备地址", value: address)
-      }
-
-      if model.bluetoothKeyboardInfo?.isConnected != true {
-        Divider().opacity(0.5)
-        Button {
-          openBluetoothSettings()
-        } label: {
-          HStack(spacing: 6) {
-            Image(systemName: "gear")
-            Text("点击打开蓝牙设置并配对设备")
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-          }
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .font(.caption)
-        .foregroundStyle(systemAccent)
-        .help("打开系统蓝牙设置")
-      }
-
-      Divider().opacity(0.5)
-
       Button {
+        navigate(to: .connection)
+      } label: {
+        HStack(spacing: 6) {
+          BluetoothKeyboardArtwork()
+            .frame(width: 32, height: 32)
+          VStack(alignment: .leading, spacing: 2) {
+            Text(model.bluetoothKeyboardInfo?.name ?? "Linx68")
+              .font(.system(size: 13))
+              .foregroundStyle(.primary)
+            HStack(spacing: 4) {
+              Text(model.bluetoothKeyboardInfo?.isConnected == true ? "已连接" : "未连接")
+              if model.bluetoothKeyboardInfo?.isConnected == true {
+                Text("-")
+                Image(systemName: bluetoothBatterySymbol)
+                  .font(.system(size: 11))
+                Text(bluetoothBatteryText)
+              }
+            }
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+          }
+          Spacer(minLength: 12)
+          Image(systemName: "info.circle")
+            .font(.system(size: 16))
+            .foregroundStyle(.secondary)
+            .frame(width: 24, height: 32, alignment: .top)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help("连接与同步设置")
+      .accessibilityLabel("设备名称，连接与同步设置")
+
+    }
+    .frame(maxWidth: .infinity)
+    .onAppear {
+      model.refreshBluetoothKeyboardInfo()
+    }
+  }
+
+  private var pushRequestDetailsButton: some View {
+    Button {
         showingPushRequestDetails = true
       } label: {
         HStack(spacing: 8) {
@@ -324,11 +310,6 @@ struct SettingsView: View {
       }
       .buttonStyle(.plain)
       .help("查看最近一次 HTTP 请求详情")
-    }
-    .frame(maxWidth: .infinity)
-    .onAppear {
-      model.refreshBluetoothKeyboardInfo()
-    }
   }
 
   private var pushRequestDetails: some View {
@@ -437,10 +418,10 @@ struct SettingsView: View {
       SettingsSystemIcon(kind: activePane.systemIcon, size: 52)
         .padding(.bottom, 10)
 
-      Text(activePane.title)
+      Text(selectedPage == .connection ? "连接与同步" : activePane.title)
         .font(.system(size: 22, weight: .bold))
         .padding(.bottom, 2)
-      Text(activePane.subtitle)
+      Text(selectedPage == .connection ? "配置设备连接、自动同步与推送" : activePane.subtitle)
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -458,7 +439,11 @@ struct SettingsView: View {
     case .monitoring:
       monitoringPane
     case .linx:
-      linxPane
+      if selectedPage == .connection {
+        connectionPane
+      } else {
+        linxPane
+      }
     case .general:
       generalPane
     }
@@ -469,32 +454,50 @@ struct SettingsView: View {
       linxMasterControl
 
       if model.isLinxEnabled {
-        Picker("Linx68 推送配置", selection: $selectedLinxPane) {
-          Text("显示与预览").tag(0)
-          Text("连接与同步").tag(1)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-
-        if selectedLinxPane == 0 {
-          displayPane
-        } else {
-          connectionPane
-        }
+        Text("键盘画面")
+          .font(.system(size: 13, weight: .semibold))
+          .padding(.top, 10)
+          .padding(.horizontal, 12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        displayPane
       }
     }
     .animation(sidebarSelectionAnimation, value: model.isLinxEnabled)
   }
 
   private var linxMasterControl: some View {
-    settingsCard(
-      title: "Linx68",
-      subtitle: model.isLinxEnabled ? "已开启自动同步与键盘推送" : "已暂停所有同步与推送",
-      symbol: "keyboard",
-      tint: brandAccent,
-      showLinxToggle: true
-    ) {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(alignment: .top, spacing: 10) {
+        SettingsSystemIcon(kind: .keyboard, size: 28)
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Linx68 推送")
+            .font(.system(size: 14, weight: .medium))
+          Text(model.isLinxEnabled ? "已开启自动同步与键盘推送" : "已暂停所有同步与推送")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        Spacer(minLength: 0)
+        Toggle("启用 Linx68", isOn: Binding(
+          get: { model.isLinxEnabled },
+          set: { model.setLinxEnabled($0) }
+        ))
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .tint(systemAccent)
+        .accessibilityLabel("启用 Linx68")
+      }
+      .padding(14)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+      Text("我的设备")
+        .font(.system(size: 13, weight: .semibold))
+        .padding(.top, 18)
+        .padding(.horizontal, 10)
+        .accessibilityAddTraits(.isHeader)
+
       keyboardStatusPanel
+        .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
   }
 
@@ -680,12 +683,9 @@ struct SettingsView: View {
   }
 
   private var previewCard: some View {
-    settingsCard(
-      title: "键盘预览",
-      subtitle: "实时显示最终画面",
-      symbol: "keyboard",
-      tint: brandAccent
-    ) {
+    VStack(spacing: 12) {
+      Text("键盘预览")
+        .font(.system(size: 13, weight: .medium))
       Group {
         if let previewImage = model.previewImage {
           Image(nsImage: previewImage)
@@ -694,24 +694,14 @@ struct SettingsView: View {
         } else {
           ZStack {
             Color(red: 8 / 255, green: 11 / 255, blue: 18 / 255)
-            VStack(spacing: 8) {
-              Image(systemName: "photo")
-                .font(.title2)
-              Text("请选择图片")
-                .font(.caption)
-            }
+            Image(systemName: "photo")
+              .font(.title2)
             .foregroundStyle(.white.opacity(0.65))
           }
         }
       }
       .frame(width: UsageCardLayout.width, height: UsageCardLayout.height)
       .clipped()
-      .overlay(alignment: .top) {
-        Text("状态栏安全区")
-          .font(.system(size: 8, weight: .medium))
-          .foregroundStyle(.white.opacity(0.35))
-          .padding(.top, 8)
-      }
       .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
       .overlay {
         RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -719,16 +709,27 @@ struct SettingsView: View {
       }
       .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
       .frame(maxWidth: .infinity)
-
-      Text(previewDescription)
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity)
     }
+    .padding(SettingsChrome.previewInset)
+    .background(systemGroupBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
   }
 
   private var connectionPane: some View {
     VStack(spacing: 10) {
+      settingsCard(title: "设备信息", subtitle: "蓝牙连接与配对", symbol: "keyboard", tint: .blue) {
+        statusRow(title: "设备名称", value: model.bluetoothKeyboardInfo?.name ?? "未发现 Linx68")
+        Divider().opacity(0.5)
+        statusRow(title: "蓝牙状态", value: model.bluetoothKeyboardInfo?.isConnected == true ? "已连接" : "未连接")
+        Divider().opacity(0.5)
+        statusRow(title: "电量", value: bluetoothBatteryText)
+        if let address = model.bluetoothKeyboardInfo?.address {
+          Divider().opacity(0.5)
+          statusRow(title: "设备地址", value: address)
+        }
+        Button("打开系统蓝牙设置", action: openBluetoothSettings)
+          .buttonStyle(.plain)
+          .foregroundStyle(systemAccent)
+      }
       settingsCard(
         title: "设备接口",
         subtitle: "连接 Linx68 图像上传服务",
@@ -794,6 +795,8 @@ struct SettingsView: View {
         statusRow(title: "用量刷新", value: model.lastRefreshText)
         Divider().opacity(0.5)
         statusRow(title: "键盘推送", value: model.lastUploadText)
+        Divider().opacity(0.5)
+        pushRequestDetailsButton
 
         if let error = model.lastError {
           Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -1614,14 +1617,21 @@ struct SettingsView: View {
     return formatter.string(from: date)
   }
 
-  private var bluetoothConnectionColor: Color {
-    model.bluetoothKeyboardInfo?.isConnected == true ? brandAccent : .secondary
-  }
-
   private var bluetoothBatteryText: String {
     guard model.bluetoothKeyboardInfo?.isConnected == true else { return "--" }
     guard let battery = model.bluetoothKeyboardInfo?.batteryPercent else { return "不可用" }
     return "\(battery)%"
+  }
+
+  private var bluetoothBatterySymbol: String {
+    guard let percent = model.bluetoothKeyboardInfo?.batteryPercent else { return "battery.0" }
+    switch percent {
+    case 0..<13: return "battery.0"
+    case 13..<38: return "battery.25"
+    case 38..<63: return "battery.50"
+    case 63..<88: return "battery.75"
+    default: return "battery.100"
+    }
   }
 
   private func openBluetoothSettings() {
@@ -1629,22 +1639,6 @@ struct SettingsView: View {
       return
     }
     NSWorkspace.shared.open(url)
-  }
-
-  private var previewDescription: String {
-    let design = model.usageCardDesign.resolved(for: model.displayMode)
-    switch model.displayMode {
-    case .codex:
-      return "\(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
-    case .claudeCode:
-      return "Claude Code · \(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
-    case .qoder:
-      return "Qoder · \(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
-    case .grok:
-      return "Grok · \(design.title) · \(model.usageCardColorScheme.title) · 顶部 \(Int(model.safeAreaHeight))px"
-    case .customImage:
-      return "\(model.displayMode.title) · 顶部 \(Int(model.safeAreaHeight))px 留空"
-    }
   }
 
   private var colorSchemeSubtitle: String {
@@ -1846,8 +1840,70 @@ enum SettingsPane: String, CaseIterable, Identifiable {
   }
 }
 
+/// Preserve AppKit's field editor, search/cancel buttons, and keyboard focus ring.
+private struct SettingsSearchField: NSViewRepresentable {
+  @Binding var text: String
+
+  func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+  func makeNSView(context: Context) -> NSSearchField {
+    let field = NSSearchField()
+    field.placeholderString = "搜索"
+    field.controlSize = .large
+    field.font = .systemFont(ofSize: 13)
+    field.focusRingType = .default
+    field.sendsSearchStringImmediately = true
+    field.sendsWholeSearchString = false
+    field.delegate = context.coordinator
+    field.setAccessibilityLabel("搜索设置")
+    field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    return field
+  }
+
+  func updateNSView(_ field: NSSearchField, context: Context) {
+    context.coordinator.text = $text
+    if field.stringValue != text { field.stringValue = text }
+  }
+
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSearchField, context: Context) -> CGSize? {
+    CGSize(width: proposal.width ?? 212, height: 30)
+  }
+
+  final class Coordinator: NSObject, NSSearchFieldDelegate {
+    var text: Binding<String>
+    init(text: Binding<String>) { self.text = text }
+
+    func controlTextDidChange(_ notification: Notification) {
+      guard let field = notification.object as? NSSearchField else { return }
+      text.wrappedValue = field.stringValue
+    }
+  }
+}
+
+private struct BluetoothKeyboardArtwork: View {
+  // Read the installed system artwork without linking to a private framework.
+  // Older macOS versions may not ship it, so retain a public SF Symbol fallback.
+  private static let image = NSImage(contentsOfFile:
+    "/System/Library/PrivateFrameworks/CoreBluetoothUI.framework/Versions/A/Resources/Generic-Keyboard.icns")
+
+  var body: some View {
+    if let image = Self.image {
+      Image(nsImage: image)
+        .resizable()
+        .interpolation(.high)
+        .scaledToFit()
+        .accessibilityHidden(true)
+    } else {
+      Image(systemName: "keyboard")
+        .font(.system(size: 24))
+        .accessibilityHidden(true)
+    }
+  }
+}
+
+
 private struct SettingsWindowConfigurator: NSViewRepresentable {
-  var pane: SettingsPane
+  var title: String
   final class Coordinator {
     var configuredWindows = Set<ObjectIdentifier>()
   }
@@ -1870,13 +1926,12 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
     DispatchQueue.main.async {
       guard let window = view.window else { return }
 
-      window.title = "\(AppBrand.displayName) 设置"
-      window.titleVisibility = .hidden
+      window.title = title
+      window.identifier = NSUserInterfaceItemIdentifier("ai-monitor-settings")
+      window.titleVisibility = .visible
       window.titlebarAppearsTransparent = true
       window.titlebarSeparatorStyle = .none
-      // Keep AppKit's titled-window behavior without a toolbar covering the
-      // full-size SwiftUI content at the top of the inset sidebar.
-      window.toolbar = nil
+      window.toolbarStyle = .unified
       window.styleMask.insert(.fullSizeContentView)
       window.styleMask.insert(.resizable)
       window.styleMask.insert(.titled)
@@ -1886,9 +1941,9 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
       window.isOpaque = false
       window.backgroundColor = .clear
 
-      window.standardWindowButton(.closeButton)?.isHidden = true
-      window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-      window.standardWindowButton(.zoomButton)?.isHidden = true
+      window.standardWindowButton(.closeButton)?.isHidden = false
+      window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+      window.standardWindowButton(.zoomButton)?.isHidden = false
 
       let identifier = ObjectIdentifier(window)
       if coordinator.configuredWindows.insert(identifier).inserted {
@@ -1899,30 +1954,6 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
   }
 }
 
-/// The same AppKit controls as a titled window, positioned in the inset sidebar.
-private struct SettingsTrafficLights: NSViewRepresentable {
-  func makeNSView(context: Context) -> NSView {
-    let view = NSView()
-    let buttons: [(NSWindow.ButtonType, Selector)] = [
-      (.closeButton, #selector(NSWindow.performClose(_:))),
-      (.miniaturizeButton, #selector(NSWindow.performMiniaturize(_:))),
-      (.zoomButton, #selector(NSWindow.performZoom(_:))),
-    ]
-    for (index, item) in buttons.enumerated() {
-      guard let button = NSWindow.standardWindowButton(item.0, for: [.titled, .closable, .miniaturizable, .resizable]) else { continue }
-      button.setFrameOrigin(NSPoint(x: index * 23, y: 1))
-      button.action = item.1
-      view.addSubview(button)
-    }
-    return view
-  }
-
-  func updateNSView(_ view: NSView, context: Context) {
-    DispatchQueue.main.async {
-      for case let button as NSButton in view.subviews { button.target = view.window }
-    }
-  }
-}
 
 private struct SettingsChoiceSurface: ViewModifier {
   let tint: Color
@@ -2114,7 +2145,7 @@ private struct SettingsPreviewCompanion: NSViewRepresentable {
         hide()
         return
       }
-      let size = NSSize(width: 188, height: max(1, hosting.fittingSize.height))
+      let size = NSSize(width: SettingsChrome.previewWidth, height: max(1, hosting.fittingSize.height))
       let screen = owner.screen?.visibleFrame ?? owner.frame.insetBy(dx: -220, dy: -20)
       panel.setFrame(SettingsPreviewPlacement.frame(owner: owner.frame, size: size, screen: screen), display: true)
       panel.appearance = owner.effectiveAppearance
@@ -2147,7 +2178,7 @@ enum SettingsPreviewPlacement {
     let left = owner.minX - gap - size.width
     // Prefer the requested right side; use the left only at a screen edge.
     let x = right + size.width <= screen.maxX ? right : max(screen.minX, left)
-    let y = max(screen.minY, min(owner.maxY - 52 - size.height, screen.maxY - size.height))
+    let y = max(screen.minY, min(owner.minY, screen.maxY - size.height))
     return NSRect(origin: NSPoint(x: x, y: y), size: size)
   }
 }
