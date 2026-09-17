@@ -146,20 +146,48 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
       by: \CodexActivityRecord.sessionID
     )
 
-    let activeHookRecords = hookRecords.filter { hookRecord in
-      guard hookRecord.state == .running else { return true }
+    let normalizedHookRecords = hookRecords.map { record in
+      // Older handlers copied pending authorization into Stop records.
+      guard record.state == .awaitingAuthorization, record.eventName == "Stop" else {
+        return record
+      }
+      return CodexActivityRecord(
+        schemaVersion: record.schemaVersion,
+        sessionID: record.sessionID,
+        turnID: record.turnID,
+        eventName: record.eventName,
+        state: .finished,
+        updatedAt: record.updatedAt,
+        source: record.source
+      )
+    }
+    let activeHookRecords = normalizedHookRecords.filter { hookRecord in
+      guard hookRecord.state == .running || hookRecord.state == .awaitingAuthorization else {
+        return true
+      }
 
       let matchingSessionRecords = sessionRecordsByID[hookRecord.sessionID] ?? []
       if matchingSessionRecords.contains(where: {
-        $0.state == .finished && $0.updatedAt >= hookRecord.updatedAt
+        $0.state == .finished && (
+          $0.updatedAt >= hookRecord.updatedAt
+            || (hookRecord.state == .awaitingAuthorization && hookRecord.turnID != nil
+              && $0.turnID == hookRecord.turnID)
+        )
       }) {
+        return false
+      }
+
+      if hookRecord.state == .awaitingAuthorization,
+        matchingSessionRecords.contains(where: {
+          $0.state == .running && $0.updatedAt > hookRecord.updatedAt
+        }) {
         return false
       }
 
       // Hooks occasionally miss Stop/SessionEnd when a task is interrupted,
       // deleted, or moved. Session JSONL is the durable source of truth; keep
       // an unmatched hook briefly to cover log creation, then discard it so a
-      // dead session cannot leave the traffic light yellow for 12 hours.
+      // dead session cannot leave the traffic light active for 12 hours.
       let age = now.timeIntervalSince(hookRecord.updatedAt)
       if age <= orphanedHookGraceInterval { return true }
       return matchingSessionRecords.contains { $0.state == .running }

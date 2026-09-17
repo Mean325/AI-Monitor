@@ -519,6 +519,80 @@ final class CodexActivityTests: XCTestCase {
     let stopped = try decoder.decode(CodexActivityRecord.self, from: stoppedData)
     XCTAssertEqual(stopped.state, .toolFailed)
     XCTAssertEqual(stopped.eventName, "Stop")
+
+    try runHook(
+      #"{"hook_event_name":"PermissionRequest","session_id":"session-1","turn_id":"turn-1"}"#
+    )
+    let pending = try decoder.decode(CodexActivityRecord.self,
+      from: Data(contentsOf: try XCTUnwrap(stateFiles.first)))
+    XCTAssertEqual(pending.state, .awaitingAuthorization)
+    try runHook(
+      #"{"hook_event_name":"Stop","session_id":"session-1","turn_id":"turn-1"}"#
+    )
+    let resolved = try decoder.decode(CodexActivityRecord.self,
+      from: Data(contentsOf: try XCTUnwrap(stateFiles.first)))
+    XCTAssertEqual(resolved.state, .finished)
+  }
+
+  @MainActor
+  func testPendingAuthorizationReconcilesWithSessionLifecycle() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let hooks = root.appendingPathComponent("hooks")
+    let sessions = root.appendingPathComponent("sessions")
+    for directory in [hooks, sessions] {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+    defer { try? FileManager.default.removeItem(at: root) }
+    let sessionID = UUID().uuidString.lowercased()
+    let sessionURL = sessions.appendingPathComponent("rollout-\(sessionID).jsonl")
+    let hookURL = hooks.appendingPathComponent("hook.json")
+    let now = Date()
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    func writeHook(event: String = "PermissionRequest", date: Date) throws {
+      try encoder.encode(CodexActivityRecord(
+        schemaVersion: 2, sessionID: sessionID, turnID: "turn-1",
+        eventName: event, state: .awaitingAuthorization, updatedAt: date
+      )).write(to: hookURL, options: .atomic)
+    }
+    func writeSession(event: String, turn: String = "turn-1", date: Date) throws {
+      let line = #"{"timestamp":"\#(formatter.string(from: date))","type":"event_msg","payload":{"type":"\#(event)","turn_id":"\#(turn)"}}"#
+      try Data((line + "\n").utf8).write(to: sessionURL)
+    }
+    let monitor = CodexActivityMonitor(directoryURL: hooks, sessionsDirectoryURL: sessions,
+      orphanedHookGraceInterval: 60)
+
+    // A real pending request must survive polling, even beyond the orphan grace.
+    try writeHook(date: now.addingTimeInterval(-120))
+    try writeSession(event: "task_started", date: now.addingTimeInterval(-180))
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .awaitingAuthorization)
+
+    // Completion/abort resolves the request, including delayed hooks for the same turn.
+    for event in ["task_complete", "turn_aborted"] {
+      try writeHook(date: now)
+      try writeSession(event: event, date: now.addingTimeInterval(-1))
+      monitor.refresh()
+      XCTAssertEqual(monitor.state, .finished)
+    }
+    try writeHook(date: now.addingTimeInterval(-120))
+    try writeSession(event: "task_started", turn: "turn-2", date: now.addingTimeInterval(-1))
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .running)
+
+    try FileManager.default.removeItem(at: sessionURL)
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .idle)
+
+    // Previously persisted Stop records are repaired without modifying local files.
+    try writeHook(event: "Stop", date: now)
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .finished)
+    try writeHook(event: "Stop", date: now.addingTimeInterval(-120))
+    monitor.refresh()
+    XCTAssertEqual(monitor.state, .idle)
   }
 
   func testHookInstallerDetectsOutdatedHandlerAndRepairsIt() throws {

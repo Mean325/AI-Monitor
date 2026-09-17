@@ -284,7 +284,7 @@ def main():
         try:
             with destination.open("r", encoding="utf-8") as handle:
                 previous_state = json.load(handle).get("state")
-            if previous_state in ("awaitingAuthorization", "toolFailed"):
+            if previous_state == "toolFailed":
                 state = previous_state
         except (OSError, AttributeError, json.JSONDecodeError):
             pass
