@@ -5,7 +5,9 @@ import SwiftUI
 @MainActor
 struct CodexLinxDisplayApp: App {
   @Environment(\.openSettings) private var openSettings
+  @NSApplicationDelegateAdaptor(DockTaskStatusAppDelegate.self) private var appDelegate
   @StateObject private var model: AppModel
+  private let dockTaskStatus: DockTaskStatusController
   private let updater: UpdaterController
 
   init() {
@@ -21,12 +23,12 @@ struct CodexLinxDisplayApp: App {
       }
     }
 
-    _model = StateObject(
-      wrappedValue: AppModel(
-        hookInstaller: hookInstaller,
-        claudeHookInstaller: claudeHookInstaller
-      )
+    let model = AppModel(
+      hookInstaller: hookInstaller,
+      claudeHookInstaller: claudeHookInstaller
     )
+    _model = StateObject(wrappedValue: model)
+    dockTaskStatus = DockTaskStatusController(model: model)
   }
 
   var body: some Scene {
@@ -45,11 +47,15 @@ struct CodexLinxDisplayApp: App {
       )
       .task {
         model.start()
+        dockTaskStatus.start()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--show-settings") {
           SettingsWindowPresenter.show(using: openSettings)
         }
         #endif
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .dockTaskStatusOpenSettings)) { _ in
+        SettingsWindowPresenter.show(using: openSettings)
       }
     }
     .menuBarExtraStyle(.window)

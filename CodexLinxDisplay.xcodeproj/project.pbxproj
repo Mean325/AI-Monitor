@@ -44,6 +44,7 @@
 		66DBEC97EEC8469D758F7535 /* UsageCardRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC162824EE74ABF8D2868960 /* UsageCardRendererTests.swift */; };
 		6CAE16DC3B98B0926F68B357 /* zh_CN.lproj in Resources */ = {isa = PBXBuildFile; fileRef = D50B5A671F9F66FB3DCDD241 /* zh_CN.lproj */; };
 		6F624A7F8B426038B367641D /* GrokCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78145063CFDF14686F4F63E6 /* GrokCardView.swift */; };
+		7169CCE88059D1607D847860 /* DockTaskStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4DA21F0194AD2E07FE2B7FE /* DockTaskStatus.swift */; };
 		71E6AE685A47BDDA3B9EB3FC /* LocalNetworkAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95E16FB6870C57E47B8775A0 /* LocalNetworkAccess.swift */; };
 		72BE29CCC5B0E5B010830C6F /* BluetoothKeyboardInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0083C7AE0456C4A0E0476A /* BluetoothKeyboardInfo.swift */; };
 		7393B2E71423C7474703B39B /* QoderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21979514AAAC95FF50CD757 /* QoderCardView.swift */; };
@@ -65,6 +66,7 @@
 		C5736989F27BAE1C1F04E72F /* ClaudeCodeUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D90BA27FA03BABD87C39173 /* ClaudeCodeUsageSnapshot.swift */; };
 		C974B68FADD45DD67801E706 /* AppGlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1508D6A6888DC3EDA401E663 /* AppGlassStyle.swift */; };
 		CE00CAFDC1C76192215C44A2 /* ClaudeCodeHookInstallerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD77F5F5A7CA909D4083505E /* ClaudeCodeHookInstallerTests.swift */; };
+		CF103E385C885E92F3DD2CF2 /* DockTaskStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C8EF92CC8C1F1674B0F5D0 /* DockTaskStatusTests.swift */; };
 		D371A65EC683670B6904276A /* GrokActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E2BD70D2DAA1E4947F5BD9 /* GrokActivityMonitor.swift */; };
 		D459B50E202C0C1B62D74956 /* UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F31BBB9EAFF18FC3E59A9A7 /* UsageSnapshot.swift */; };
 		D5E9FEAA6D6AE5D47A344DED /* GrokActivityInterpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEB9B3BA1D773C7DEDA8D08 /* GrokActivityInterpreter.swift */; };
@@ -124,6 +126,7 @@
 		A0B0F75745430B7CFD7642BB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1BFBE53B2CB746D5F7F92F0 /* GrokActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokActivityTests.swift; sourceTree = "<group>"; };
 		A21979514AAAC95FF50CD757 /* QoderCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderCardView.swift; sourceTree = "<group>"; };
+		A4DA21F0194AD2E07FE2B7FE /* DockTaskStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockTaskStatus.swift; sourceTree = "<group>"; };
 		A63D919C44854AAB303C5CCE /* en.lproj */ = {isa = PBXFileReference; path = en.lproj; sourceTree = "<group>"; };
 		AF3F912B3DCBBEF67524E28E /* TaskTrafficLight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskTrafficLight.swift; sourceTree = "<group>"; };
 		B2F9102413779B09A2480346 /* BrandLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandLogoView.swift; sourceTree = "<group>"; };
@@ -131,6 +134,7 @@
 		BC162824EE74ABF8D2868960 /* UsageCardRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardRendererTests.swift; sourceTree = "<group>"; };
 		BD0083C7AE0456C4A0E0476A /* BluetoothKeyboardInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothKeyboardInfo.swift; sourceTree = "<group>"; };
 		C0E161EF3D5262E90F444877 /* QoderUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QoderUsageClientTests.swift; sourceTree = "<group>"; };
+		C1C8EF92CC8C1F1674B0F5D0 /* DockTaskStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockTaskStatusTests.swift; sourceTree = "<group>"; };
 		C5A75D8776677D666E7C841F /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		C814D7BD1845B7EA2DA66627 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		CA2772AEC9F5602218A73551 /* CodexHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexHookInstaller.swift; sourceTree = "<group>"; };
@@ -167,6 +171,7 @@
 				DD77F5F5A7CA909D4083505E /* ClaudeCodeHookInstallerTests.swift */,
 				104FE28005328026A994385B /* ClaudeCodeUsageClientTests.swift */,
 				9923333557F59D96FE374FDB /* CodexActivityTests.swift */,
+				C1C8EF92CC8C1F1674B0F5D0 /* DockTaskStatusTests.swift */,
 				A1BFBE53B2CB746D5F7F92F0 /* GrokActivityTests.swift */,
 				E7B7A2D56F1851CC71B3219B /* GrokUsageClientTests.swift */,
 				C0E161EF3D5262E90F444877 /* QoderUsageClientTests.swift */,
@@ -188,6 +193,7 @@
 				DA4F2C152644D3DFFE9DC776 /* CodexActivityMonitor.swift */,
 				CA2772AEC9F5602218A73551 /* CodexHookInstaller.swift */,
 				5C4E784D5D9F2A8F6DA9F59D /* CodexLinxDisplayApp.swift */,
+				A4DA21F0194AD2E07FE2B7FE /* DockTaskStatus.swift */,
 				65E2BD70D2DAA1E4947F5BD9 /* GrokActivityMonitor.swift */,
 				95E16FB6870C57E47B8775A0 /* LocalNetworkAccess.swift */,
 				0C0A9F7078CF4808E985B531 /* MenuBarContentView.swift */,
@@ -411,6 +417,7 @@
 				101AB246A549DE12272FDD1C /* CodexHookInstaller.swift in Sources */,
 				21F7C9D1552F47EF26F43C7F /* CodexLinxDisplayApp.swift in Sources */,
 				577A03D9D0CF0345D7AF0938 /* CodexRateLimitClient.swift in Sources */,
+				7169CCE88059D1607D847860 /* DockTaskStatus.swift in Sources */,
 				D5E9FEAA6D6AE5D47A344DED /* GrokActivityInterpreter.swift in Sources */,
 				D371A65EC683670B6904276A /* GrokActivityMonitor.swift in Sources */,
 				6F624A7F8B426038B367641D /* GrokCardView.swift in Sources */,
@@ -444,6 +451,7 @@
 				CE00CAFDC1C76192215C44A2 /* ClaudeCodeHookInstallerTests.swift in Sources */,
 				9D8B9F23FAE7BCD28E63D39B /* ClaudeCodeUsageClientTests.swift in Sources */,
 				3F0C2BDC9AEB52BD5B8D3174 /* CodexActivityTests.swift in Sources */,
+				CF103E385C885E92F3DD2CF2 /* DockTaskStatusTests.swift in Sources */,
 				F717705B2BE915943180FE3C /* GrokActivityTests.swift in Sources */,
 				142508F9F0BAE3E84CC9215B /* GrokUsageClientTests.swift in Sources */,
 				324F77453A7F2C35AEE5D93C /* QoderUsageClientTests.swift in Sources */,

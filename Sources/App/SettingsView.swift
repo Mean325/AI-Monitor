@@ -914,6 +914,31 @@ struct SettingsView: View {
             }
           }
         }
+
+        Divider().opacity(0.5)
+
+        HStack {
+          Text("程序坞展示任务状态")
+          Spacer()
+          Toggle("程序坞展示任务状态", isOn: $model.showTaskStatusInDock)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .tint(systemAccent)
+        }
+        .padding(.vertical, 6)
+        if model.showTaskStatusInDock {
+          HStack(spacing: 10) {
+            Image(nsImage: DockTaskStatusIcon.makeImage(
+              state: model.selectedActivityState, darkAppearance: colorScheme == .dark))
+              .resizable()
+              .frame(width: 48, height: 48)
+            VStack(alignment: .leading, spacing: 4) {
+              Text(model.taskStatusDescription).font(.caption)
+              Text("背景跟随系统深浅色 · 点击程序坞图标打开设置")
+                .font(.caption).foregroundStyle(.secondary)
+            }
+          }
+        }
       }
 
       if model.selectedAIMode == .codex {

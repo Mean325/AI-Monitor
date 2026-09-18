@@ -176,6 +176,13 @@ final class AppModel: ObservableObject {
     }
   }
 
+  @Published var showTaskStatusInDock: Bool {
+    didSet {
+      defaults.set(showTaskStatusInDock, forKey: "showTaskStatusInDock")
+      if showTaskStatusInDock { refreshSelectedActivity() }
+    }
+  }
+
   @Published var showUsageInMenuBar: Bool {
     didSet {
       defaults.set(showUsageInMenuBar, forKey: "showUsageInMenuBar")
@@ -343,6 +350,7 @@ final class AppModel: ObservableObject {
     isLinxEnabled = defaults.object(forKey: Keys.linxEnabled) as? Bool ?? true
     smartSwitchEnabled = defaults.bool(forKey: Keys.smartSwitchEnabled)
     showTaskStatusInMenuBar = defaults.bool(forKey: "showTaskStatusInMenuBar")
+    showTaskStatusInDock = defaults.bool(forKey: "showTaskStatusInDock")
     showUsageInMenuBar = defaults.object(forKey: "showUsageInMenuBar") as? Bool ?? true
     menuBarOriginalIconPosition = MenuBarOriginalIconPosition(
       rawValue: defaults.string(forKey: "menuBarOriginalIconPosition") ?? ""
