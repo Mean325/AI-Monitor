@@ -6,6 +6,7 @@ enum CodexActivityState: String, Codable, Equatable, Sendable {
   case running
   case awaitingAuthorization
   case toolFailed
+  case quotaExhausted
 
   var title: String {
     switch self {
@@ -14,6 +15,7 @@ enum CodexActivityState: String, Codable, Equatable, Sendable {
     case .running: return "任务进行中"
     case .awaitingAuthorization: return "等待授权"
     case .toolFailed: return "工具执行失败"
+    case .quotaExhausted: return "用量不足"
     }
   }
 
@@ -22,8 +24,9 @@ enum CodexActivityState: String, Codable, Equatable, Sendable {
     case .idle: return 0
     case .finished: return 1
     case .running: return 2
-    case .awaitingAuthorization: return 3
-    case .toolFailed: return 4
+    case .quotaExhausted: return 3
+    case .awaitingAuthorization: return 4
+    case .toolFailed: return 5
     }
   }
 }

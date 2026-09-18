@@ -99,6 +99,7 @@ enum GrokActivityInterpreter {
   static func aggregate(_ states: [CodexActivityState]) -> CodexActivityState {
     if states.contains(.toolFailed) { return .toolFailed }
     if states.contains(.awaitingAuthorization) { return .awaitingAuthorization }
+    if states.contains(.quotaExhausted) { return .quotaExhausted }
     if states.contains(.running) { return .running }
     if states.contains(.finished) { return .finished }
     return .idle

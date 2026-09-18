@@ -95,7 +95,7 @@ enum SmartDisplayResolver {
     case .toolFailed: return 3
     case .awaitingAuthorization: return 2
     case .running: return 1
-    case .finished, .idle: return 0
+    case .finished, .idle, .quotaExhausted: return 0
     }
   }
 
@@ -1143,12 +1143,27 @@ final class AppModel: ObservableObject {
     applyCodexActivity(state, uploadIfChanged: true)
   }
 
+  private var isCodexQuotaExhausted: Bool {
+    snapshot?.isQuotaExhausted == true || activityMonitor.state == .quotaExhausted
+  }
+
   private func applyCodexActivity(
     _ state: CodexActivityState,
     uploadIfChanged: Bool = false
   ) {
-    let resolved = snapshot?.isQuotaExhausted == true ? .toolFailed : state
-    guard codexActivityState != resolved else { return }
+    let resolved: CodexActivityState
+    switch state {
+    case .toolFailed, .awaitingAuthorization:
+      // A known tool error or pending request keeps its own cause and label.
+      resolved = state
+    default:
+      resolved = isCodexQuotaExhausted ? .quotaExhausted : state
+    }
+    guard codexActivityState != resolved else {
+      // The reason for a red light can change without its color changing.
+      reevaluateSmartDisplayMode()
+      return
+    }
     codexActivityState = resolved
     let previousMode = displayMode
     reevaluateSmartDisplayMode()

@@ -884,7 +884,7 @@ struct SettingsView: View {
               state: model.selectedActivityState, mode: model.presentedAIMode))
             Text(model.taskStatusDescription).font(.caption)
           }
-          Text("红灯等待授权/失败 · 黄灯进行中 · 绿灯完成/空闲。")
+          Text("红灯等待授权/用量不足/工具失败 · 黄灯进行中 · 绿灯完成/空闲。")
             .font(.caption).foregroundStyle(.secondary)
         }
 
@@ -1706,7 +1706,7 @@ struct SettingsView: View {
     case .finished: return .green
     case .running: return .yellow
     case .awaitingAuthorization: return .red
-    case .toolFailed: return .red
+    case .toolFailed, .quotaExhausted: return .red
     }
   }
 
@@ -1725,7 +1725,7 @@ struct SettingsView: View {
     case .finished: return .green
     case .running: return .yellow
     case .awaitingAuthorization: return .red
-    case .toolFailed: return .red
+    case .toolFailed, .quotaExhausted: return .red
     }
   }
 
@@ -1744,7 +1744,7 @@ struct SettingsView: View {
     case .finished: return .green
     case .running: return .yellow
     case .awaitingAuthorization: return .red
-    case .toolFailed: return .red
+    case .toolFailed, .quotaExhausted: return .red
     }
   }
 
@@ -1754,7 +1754,7 @@ struct SettingsView: View {
     case .finished: return .green
     case .running: return .yellow
     case .awaitingAuthorization: return .red
-    case .toolFailed: return .red
+    case .toolFailed, .quotaExhausted: return .red
     }
   }
 
@@ -1947,6 +1947,10 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
 
       let identifier = ObjectIdentifier(window)
       if coordinator.configuredWindows.insert(identifier).inserted {
+        // Let the window receive initial keyboard focus; search remains
+        // available when explicitly clicked or reached with Tab.
+        window.initialFirstResponder = window.contentView
+        window.makeFirstResponder(nil)
         window.setContentSize(NSSize(width: 760, height: 660))
         window.center()
       }

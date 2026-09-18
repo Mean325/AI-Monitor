@@ -428,7 +428,7 @@ private final class CodexSessionLogActivityReader {
             sessionID: sessionID,
             turnID: payload.turnID,
             eventName: eventName,
-            state: resetPassed ? .idle : .toolFailed,
+            state: resetPassed ? .idle : .quotaExhausted,
             updatedAt: updatedAt
           )
           if resetPassed {
@@ -460,7 +460,7 @@ private final class CodexSessionLogActivityReader {
     if let expiredRecord, !lifecycleNewerThanQuota {
       return (expiredRecord, true)
     }
-    if sawMeaningfulQuota, latestLifecycle?.state == .toolFailed, !lifecycleNewerThanQuota {
+    if sawMeaningfulQuota, latestLifecycle?.state == .quotaExhausted, !lifecycleNewerThanQuota {
       return (
         CodexActivityRecord(
           schemaVersion: 2,
@@ -483,7 +483,7 @@ private final class CodexSessionLogActivityReader {
     case "error":
       let message = payload.message?.lowercased() ?? ""
       if ["usage limit", "usage_limit", "quota", "用量", "额度"].contains(where: message.contains) {
-        return .toolFailed
+        return .quotaExhausted
       }
       return nil
     default: return nil

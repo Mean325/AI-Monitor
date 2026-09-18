@@ -21,7 +21,7 @@ final class CodexActivityTests: XCTestCase {
       sessionsDirectoryURL: sessions)
     try Data((start + "\n" + quota(credits: false, resetAt: reset) + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(monitor.state, .quotaExhausted)
     XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 0)
     let recovered = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":0},"secondary":{"used_percent":43},"credits":{"has_credits":false}}}}"#
     try Data((start + "\n" + quota(credits: false, resetAt: reset) + "\n" + recovered + "\n").utf8).write(to: url)
@@ -39,12 +39,12 @@ final class CodexActivityTests: XCTestCase {
     XCTAssertEqual(monitor.state, .idle)
     try Data((start + "\n" + quota(credits: false, resetAt: reset) + "\n" + start + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(monitor.state, .quotaExhausted)
     XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 0)
     let error = #"{"timestamp":"\#(date)","type":"event_msg","payload":{"type":"error","message":"You have hit your usage limit"}}"#
     try Data((start + "\n" + error + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(monitor.state, .quotaExhausted)
   }
 
   @MainActor
@@ -68,17 +68,17 @@ final class CodexActivityTests: XCTestCase {
 
     try Data((start + "\n" + exhausted + "\n" + premium + "\n" + complete + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(monitor.state, .quotaExhausted)
     XCTAssertEqual(TaskTrafficLight.activeIndex(state: monitor.state, mode: .codex), 0)
 
     try Data((start + "\n" + exhausted + "\n" + premium + "\n" + complete + "\n" + start + "\n").utf8)
       .write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(monitor.state, .quotaExhausted)
 
     try Data((start + "\n" + missingCredits + "\n" + complete + "\n").utf8).write(to: url)
     monitor.refresh()
-    XCTAssertEqual(monitor.state, .toolFailed)
+    XCTAssertEqual(monitor.state, .quotaExhausted)
   }
 
   func testTrafficLightPriorityIsFailureThenAuthorizationThenRunningThenFinished() {

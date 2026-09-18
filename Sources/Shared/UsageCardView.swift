@@ -40,7 +40,7 @@ struct NothingUsageCardView: View {
       return Color(red: 51 / 255, green: 199 / 255, blue: 110 / 255)
     case .running:
       return Color(red: 255 / 255, green: 199 / 255, blue: 31 / 255)
-    case .awaitingAuthorization, .toolFailed:
+    case .awaitingAuthorization, .toolFailed, .quotaExhausted:
       return Color(red: 242 / 255, green: 56 / 255, blue: 64 / 255)
     }
   }
@@ -697,7 +697,7 @@ struct UsageCardView: View {
       return Color(red: 255 / 255, green: 199 / 255, blue: 31 / 255)
     case .awaitingAuthorization:
       return Color(red: 242 / 255, green: 56 / 255, blue: 64 / 255)
-    case .toolFailed:
+    case .toolFailed, .quotaExhausted:
       return Color(red: 242 / 255, green: 56 / 255, blue: 64 / 255)
     }
   }

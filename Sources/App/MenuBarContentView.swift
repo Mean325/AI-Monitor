@@ -395,7 +395,9 @@ enum SettingsWindowPresenter {
     if window.isMiniaturized {
       window.deminiaturize(nil)
     }
+    window.initialFirstResponder = window.contentView
     window.makeKeyAndOrderFront(nil)
+    window.makeFirstResponder(nil)
     window.orderFrontRegardless()
     return true
   }

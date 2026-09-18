@@ -5,7 +5,7 @@ enum TaskTrafficLight {
   static func activeIndex(state: CodexActivityState?, mode: DisplayMode) -> Int? {
     guard mode.isUsageMode, let state else { return nil }
     switch state {
-    case .awaitingAuthorization, .toolFailed: return 0
+    case .awaitingAuthorization, .toolFailed, .quotaExhausted: return 0
     case .running: return 1
     case .finished, .idle: return 2
     }

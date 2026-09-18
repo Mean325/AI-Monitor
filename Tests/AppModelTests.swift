@@ -135,6 +135,72 @@ final class AppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testExhaustedCodexSnapshotDoesNotBlockGrokSmartSwitch() async throws {
+    let suite = "SmartQuotaSnapshotTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(true, forKey: "linxEnabled")
+    let codex = FakeCodexActivityMonitor()
+    let grok = FakeCodexActivityMonitor()
+    let model = AppModel(defaults: defaults, codexClient: ExhaustedCodexClient(),
+      activityMonitor: codex, claudeActivityMonitor: FakeCodexActivityMonitor(),
+      qoderActivityMonitor: FakeCodexActivityMonitor(), grokActivityMonitor: grok)
+    await model.synchronize(upload: false, forceUpload: false)
+    model.setLinxEnabled(false)
+    model.start()
+    model.setSmartSwitchEnabled(true)
+    XCTAssertEqual(model.codexActivityState, .quotaExhausted)
+    XCTAssertFalse(model.isSmartSwitchActive)
+    codex.send(.running)
+    grok.send(.running)
+    XCTAssertEqual(model.displayMode, .grok)
+    codex.send(.quotaExhausted)
+    XCTAssertEqual(model.displayMode, .grok)
+    XCTAssertEqual(model.codexActivityState.title, "用量不足")
+    codex.send(.toolFailed)
+    XCTAssertEqual(model.codexActivityState.title, "工具执行失败")
+    XCTAssertEqual(model.displayMode, .codex)
+    codex.send(.idle)
+    XCTAssertEqual(model.displayMode, .grok)
+    grok.send(.finished)
+    XCTAssertEqual(model.displayMode, .codex)
+    XCTAssertFalse(model.isSmartSwitchActive)
+    XCTAssertEqual(model.codexActivityState, .quotaExhausted)
+  }
+
+  @MainActor
+  func testSessionQuotaDoesNotPreemptGrokAndRecoveryRestoresFailurePriority() throws {
+    let suite = "SmartQuotaSessionTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(false, forKey: "linxEnabled")
+    let codex = FakeCodexActivityMonitor()
+    let grok = FakeCodexActivityMonitor()
+    let model = AppModel(defaults: defaults, activityMonitor: codex,
+      claudeActivityMonitor: FakeCodexActivityMonitor(),
+      qoderActivityMonitor: FakeCodexActivityMonitor(), grokActivityMonitor: grok)
+    model.start()
+    model.setSmartSwitchEnabled(true)
+    codex.send(.running)
+    codex.send(.quotaExhausted)
+    XCTAssertFalse(model.isSmartSwitchActive)
+    grok.send(.running)
+    XCTAssertEqual(model.displayMode, .grok)
+    codex.send(.quotaExhausted)
+    XCTAssertEqual(model.displayMode, .grok)
+    grok.send(.awaitingAuthorization)
+    XCTAssertEqual(model.displayMode, .grok)
+    // A genuine tool failure after quota recovery is still actionable.
+    codex.send(.toolFailed)
+    XCTAssertEqual(model.displayMode, .codex)
+    codex.send(.finished)
+    XCTAssertEqual(model.displayMode, .grok)
+    grok.send(.finished)
+    XCTAssertEqual(model.displayMode, .codex)
+    XCTAssertFalse(model.isSmartSwitchActive)
+  }
+
+  @MainActor
   func testDisablingSmartSwitchRestoresDisplayAndSelectedOnlyMonitoring() throws {
     let suite = "SmartSwitchDisableTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -327,6 +393,7 @@ final class AppModelTests: XCTestCase {
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .finished, mode: mode), 2)
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .awaitingAuthorization, mode: mode), 0)
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .toolFailed, mode: mode), 0)
+      XCTAssertEqual(TaskTrafficLight.activeIndex(state: .quotaExhausted, mode: mode), 0)
       XCTAssertNil(TaskTrafficLight.activeIndex(state: nil, mode: mode))
     }
     XCTAssertEqual(TaskTrafficLight.activeIndex(state: .idle, mode: .grok), 2)
@@ -701,11 +768,11 @@ final class AppModelTests: XCTestCase {
     )
 
     await model.synchronize(upload: false, forceUpload: false)
-    XCTAssertEqual(model.codexActivityState, .toolFailed)
+    XCTAssertEqual(model.codexActivityState, .quotaExhausted)
     XCTAssertEqual(TaskTrafficLight.activeIndex(state: model.codexActivityState, mode: .codex), 0)
 
     activityMonitor.send(.running)
-    XCTAssertEqual(model.codexActivityState, .toolFailed)
+    XCTAssertEqual(model.codexActivityState, .quotaExhausted)
     XCTAssertEqual(TaskTrafficLight.activeIndex(state: model.codexActivityState, mode: .codex), 0)
   }
 
