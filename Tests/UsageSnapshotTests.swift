@@ -3,6 +3,29 @@ import XCTest
 @testable import CodexLinxDisplay
 
 final class UsageSnapshotTests: XCTestCase {
+  func testFindsCodexInCurrentAppBundleLayouts() {
+    XCTAssertEqual(
+      CodexRateLimitClient.bundledExecutablePaths.prefix(2),
+      [
+        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+      ]
+    )
+    XCTAssertTrue(
+      CodexRateLimitClient.bundledExecutablePaths.contains(
+        "/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex"
+      )
+    )
+  }
+
+  func testBuildsCodexCandidatesFromSearchPath() {
+    XCTAssertEqual(
+      CodexRateLimitClient.executablePaths(from: "/custom/bin:/another path/bin"),
+      ["/custom/bin/codex", "/another path/bin/codex"]
+    )
+    XCTAssertEqual(CodexRateLimitClient.executablePaths(from: nil), [])
+  }
+
   func testParsesFiveHourWindowWithoutChangingWeeklyWindow() throws {
     for reversed in [false, true] {
       let short = #"{"usedPercent":25,"windowDurationMins":300,"resetsAt":1800000000}"#

@@ -31,6 +31,18 @@ enum CodexClientError: LocalizedError {
 }
 
 final class CodexRateLimitClient: CodexRateLimitFetching, @unchecked Sendable {
+  // Keep the launchers before their underlying binaries: the launcher path is
+  // the stable entry point used by recent ChatGPT/Codex app bundles.
+  static let bundledExecutablePaths = [
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+    "/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex",
+    "/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+    // Pre-0.158 app bundles placed the executable directly in Resources.
+    "/Applications/ChatGPT.app/Contents/Resources/codex",
+    "/Applications/Codex.app/Contents/Resources/codex",
+  ]
+
   private let explicitExecutableURL: URL?
 
   init(executableURL: URL? = nil) {
@@ -187,21 +199,32 @@ final class CodexRateLimitClient: CodexRateLimitFetching, @unchecked Sendable {
       return explicitExecutableURL
     }
 
+    let environment = ProcessInfo.processInfo.environment
     var candidates: [String] = []
-    if let environmentPath = ProcessInfo.processInfo.environment["CODEX_CLI_PATH"] {
+    if let environmentPath = environment["CODEX_CLI_PATH"] {
       candidates.append(environmentPath)
     }
+    candidates.append(contentsOf: Self.bundledExecutablePaths)
+    candidates.append(contentsOf: Self.executablePaths(from: environment["PATH"]))
     candidates.append(contentsOf: [
-      "/Applications/ChatGPT.app/Contents/Resources/codex",
-      "/Applications/Codex.app/Contents/Resources/codex",
       "/opt/homebrew/bin/codex",
       "/usr/local/bin/codex",
+      FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".local/bin/codex").path,
     ])
 
     guard let path = candidates.first(where: FileManager.default.isExecutableFile(atPath:)) else {
       throw CodexClientError.executableNotFound
     }
     return URL(fileURLWithPath: path)
+  }
+
+  static func executablePaths(from searchPath: String?) -> [String] {
+    guard let searchPath else { return [] }
+    return searchPath.split(separator: ":", omittingEmptySubsequences: true).map {
+      URL(fileURLWithPath: String($0), isDirectory: true)
+        .appendingPathComponent("codex").path
+    }
   }
 }
 
