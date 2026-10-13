@@ -190,7 +190,9 @@ final class CodexActivityMonitor: CodexActivityMonitoring {
       // dead session cannot leave the traffic light active for 12 hours.
       let age = now.timeIntervalSince(hookRecord.updatedAt)
       if age <= orphanedHookGraceInterval { return true }
-      return matchingSessionRecords.contains { $0.state == .running }
+      return matchingSessionRecords.contains {
+        $0.state == .running || $0.state == .awaitingUserInput
+      }
     }
 
     return activeHookRecords + sessionRecords
@@ -258,6 +260,31 @@ private final class CodexSessionLogActivityReader {
       let turnID: String?
       let message: String?
       let rateLimits: Limits?
+      let name: String?
+      let callID: String?
+      let arguments: String?
+      let output: ToolOutput?
+      let role: String?
+      let content: [Content]?
+
+      struct Content: Decodable {
+        let text: String?
+      }
+
+      struct ToolOutput: Decodable {
+        let accepted: Bool?
+
+        init(from decoder: Decoder) throws {
+          let container = try decoder.singleValueContainer()
+          if let text = try? container.decode(String.self) {
+            accepted = (try? JSONSerialization.jsonObject(with: Data(text.utf8))
+              as? [String: Any])?["accepted"] as? Bool
+          } else {
+            struct Acceptance: Decodable { let accepted: Bool? }
+            accepted = (try? container.decode(Acceptance.self))?.accepted
+          }
+        }
+      }
 
       struct Limits: Decodable {
         struct Window: Decodable {
@@ -292,6 +319,8 @@ private final class CodexSessionLogActivityReader {
         case turnID = "turn_id"
         case message
         case rateLimits = "rate_limits"
+        case name, arguments, output, role, content
+        case callID = "call_id"
       }
     }
 
@@ -378,7 +407,7 @@ private final class CodexSessionLogActivityReader {
       }
 
       let parsed = parseActivity(in: carriedData, sessionID: sessionID)
-      if parsed.sawMeaningfulQuota || startOffset == 0 {
+      if (parsed.sawMeaningfulQuota && parsed.sawLifecycleBoundary) || startOffset == 0 {
         return parsed.record
       }
       endOffset = startOffset
@@ -395,7 +424,7 @@ private final class CodexSessionLogActivityReader {
   }
 
   private func parseActivity(in data: Data, sessionID: String) -> (
-    record: CodexActivityRecord?, sawMeaningfulQuota: Bool
+    record: CodexActivityRecord?, sawMeaningfulQuota: Bool, sawLifecycleBoundary: Bool
   ) {
     let decoder = JSONDecoder()
     var latestLifecycle: CodexActivityRecord?
@@ -403,16 +432,69 @@ private final class CodexSessionLogActivityReader {
     var expiredRecord: CodexActivityRecord?
     var sawMeaningfulQuota = false
     var lifecycleNewerThanQuota = false
+    var sawLifecycleBoundary = false
+    var toolResults: [String: (date: Date, accepted: Bool?, newerThanQuota: Bool)] = [:]
+    var replies: [String: (indices: Set<Int>, date: Date, newerThanQuota: Bool)] = [:]
+    var pendingInput: (record: CodexActivityRecord, newerThanQuota: Bool)?
+    var resumedInput: (record: CodexActivityRecord, newerThanQuota: Bool)?
 
     for line in data.split(separator: 0x0A).reversed() {
       guard
         let envelope = try? decoder.decode(SessionEnvelope.self, from: Data(line)),
-        envelope.type == "event_msg",
         let eventName = envelope.payload?.type,
         let payload = envelope.payload,
         let updatedAt = parseDate(envelope.timestamp)
       else {
         continue
+      }
+
+      if envelope.type == "response_item", !sawLifecycleBoundary {
+        switch eventName {
+        case "function_call_output":
+          if let callID = payload.callID {
+            toolResults[callID] = (updatedAt, payload.output?.accepted, !sawMeaningfulQuota)
+          }
+        case "message" where payload.role == "user":
+          for content in payload.content ?? [] {
+            for reply in questionReplies(in: content.text ?? "") {
+              var answered = replies[reply.callID] ?? ([], updatedAt, !sawMeaningfulQuota)
+              answered.indices.insert(reply.index)
+              replies[reply.callID] = answered
+            }
+          }
+        case "function_call":
+          let name = payload.name?.split(separator: ".").last.map(String.init) ?? ""
+          guard ["request_user_input", "request_user_input_async"].contains(name),
+            let callID = payload.callID else { continue }
+          let result = toolResults[callID]
+          let reply = replies[callID]
+          let isAsync = name == "request_user_input_async"
+          let answeredAll = Set(0..<questionCount(in: payload.arguments))
+            .isSubset(of: reply?.indices ?? [])
+          // Async tools acknowledge delivery immediately. Only submitted answers
+          // (or a rejected request) resolve them; other tool activity does not.
+          let resolved = isAsync
+            ? (answeredAll || (result != nil && result?.accepted != true))
+            : result != nil
+          let record = CodexActivityRecord(
+            schemaVersion: 2, sessionID: sessionID, turnID: nil,
+            eventName: name, state: resolved ? .running : .awaitingUserInput,
+            updatedAt: resolved ? (reply?.date ?? result?.date ?? updatedAt) : updatedAt
+          )
+          if !resolved, pendingInput == nil {
+            pendingInput = (record, !sawMeaningfulQuota)
+          } else if resolved,
+            record.updatedAt > (resumedInput?.record.updatedAt ?? .distantPast) {
+            resumedInput = (record, reply?.newerThanQuota ?? result?.newerThanQuota ?? !sawMeaningfulQuota)
+          }
+        default: break
+        }
+        continue
+      }
+
+      guard envelope.type == "event_msg" else { continue }
+      if ["task_started", "task_complete", "turn_aborted"].contains(eventName) {
+        sawLifecycleBoundary = true
       }
 
       if !sawMeaningfulQuota,
@@ -451,14 +533,21 @@ private final class CodexSessionLogActivityReader {
         lifecycleNewerThanQuota = !sawMeaningfulQuota
       }
 
-      if latestLifecycle != nil, sawMeaningfulQuota { break }
+      if sawLifecycleBoundary, sawMeaningfulQuota { break }
     }
 
+    if let pendingInput {
+      return (pendingInput.record, sawMeaningfulQuota, sawLifecycleBoundary)
+    }
+    if latestLifecycle?.state != .quotaExhausted, let input = resumedInput {
+      latestLifecycle = input.record
+      lifecycleNewerThanQuota = input.newerThanQuota
+    }
     if let exhaustedRecord {
-      return (exhaustedRecord, true)
+      return (exhaustedRecord, true, sawLifecycleBoundary)
     }
     if let expiredRecord, !lifecycleNewerThanQuota {
-      return (expiredRecord, true)
+      return (expiredRecord, true, sawLifecycleBoundary)
     }
     if sawMeaningfulQuota, latestLifecycle?.state == .quotaExhausted, !lifecycleNewerThanQuota {
       return (
@@ -470,10 +559,36 @@ private final class CodexSessionLogActivityReader {
           state: .idle,
           updatedAt: latestLifecycle?.updatedAt ?? Date()
         ),
-        true
+        true,
+        sawLifecycleBoundary
       )
     }
-    return (latestLifecycle, sawMeaningfulQuota)
+    return (latestLifecycle, sawMeaningfulQuota, sawLifecycleBoundary)
+  }
+
+  private func questionCount(in arguments: String?) -> Int {
+    guard let arguments,
+      let object = try? JSONSerialization.jsonObject(with: Data(arguments.utf8))
+        as? [String: Any],
+      let questions = object["questions"] as? [Any] else { return 1 }
+    return max(1, questions.count)
+  }
+
+  private func questionReplies(in text: String) -> [(callID: String, index: Int)] {
+    guard let start = text.range(of: "<send_user_message_question_reply>"),
+      let end = text.range(of: "</send_user_message_question_reply>",
+        range: start.upperBound..<text.endIndex),
+      let answers = try? JSONSerialization.jsonObject(
+        with: Data(text[start.upperBound..<end.lowerBound].utf8)
+      ) as? [[String: Any]] else { return [] }
+    return answers.compactMap { answer in
+      guard let id = answer["questionItemId"] as? String,
+        let components = try? JSONSerialization.jsonObject(with: Data(id.utf8)) as? [Any],
+        components.count == 3,
+        let callID = components[1] as? String,
+        let index = components[2] as? Int else { return nil }
+      return (callID, index)
+    }
   }
 
   private func lifecycleState(for payload: SessionEnvelope.Payload) -> CodexActivityState? {

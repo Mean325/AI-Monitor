@@ -118,6 +118,12 @@ final class AppModelTests: XCTestCase {
     XCTAssertEqual(model.displayMode, .claudeCode)
     XCTAssertTrue(model.isSmartSwitchActive)
 
+    codex.send(.awaitingUserInput)
+    XCTAssertEqual(model.displayMode, .codex)
+    XCTAssertEqual(model.selectedActivityState, .awaitingUserInput)
+    codex.send(.idle)
+    XCTAssertEqual(model.displayMode, .claudeCode)
+
     grok.send(.awaitingAuthorization)
     XCTAssertEqual(model.displayMode, .grok)
     XCTAssertEqual(model.presentedAIMode, .grok)
@@ -392,6 +398,7 @@ final class AppModelTests: XCTestCase {
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .running, mode: mode), 1)
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .finished, mode: mode), 2)
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .awaitingAuthorization, mode: mode), 0)
+      XCTAssertEqual(TaskTrafficLight.activeIndex(state: .awaitingUserInput, mode: mode), 0)
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .toolFailed, mode: mode), 0)
       XCTAssertEqual(TaskTrafficLight.activeIndex(state: .quotaExhausted, mode: mode), 0)
       XCTAssertNil(TaskTrafficLight.activeIndex(state: nil, mode: mode))

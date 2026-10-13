@@ -33,7 +33,7 @@ final class DockTaskStatusTests: XCTestCase {
   func testStatusLensAndBezelRemainVisibleInBothAppearances() throws {
     for dark in [false, true] {
       for state in [CodexActivityState.idle, .finished, .running,
-                    .awaitingAuthorization, .toolFailed, .quotaExhausted] {
+                    .awaitingAuthorization, .awaitingUserInput, .toolFailed, .quotaExhausted] {
         let image = DockTaskStatusIcon.makeImage(state: state, darkAppearance: dark)
         XCTAssertFalse(image.isTemplate)
         // The Dock must receive finished pixels, not a lazy drawing handler
@@ -60,7 +60,7 @@ final class DockTaskStatusTests: XCTestCase {
         case .running:
           XCTAssertGreaterThan(lens.redComponent, lens.greenComponent)
           XCTAssertGreaterThan(lens.greenComponent, lens.blueComponent)
-        case .awaitingAuthorization, .toolFailed, .quotaExhausted:
+        case .awaitingAuthorization, .awaitingUserInput, .toolFailed, .quotaExhausted:
           XCTAssertGreaterThan(lens.redComponent, lens.greenComponent)
         }
       }

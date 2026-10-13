@@ -3,7 +3,189 @@ import XCTest
 
 @testable import CodexLinxDisplay
 
+@MainActor
+private final class QuestionSession {
+  let sessionID = UUID().uuidString.lowercased()
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  var hooksURL: URL { root.appendingPathComponent("hooks") }
+  private var sessionURL: URL {
+    root.appendingPathComponent("sessions/rollout-\(sessionID).jsonl")
+  }
+  lazy var monitor = CodexActivityMonitor(
+    directoryURL: hooksURL, sessionsDirectoryURL: root.appendingPathComponent("sessions")
+  )
+  private var transcript = Data()
+
+  init() throws {
+    try FileManager.default.createDirectory(
+      at: sessionURL.deletingLastPathComponent(), withIntermediateDirectories: true
+    )
+    try append("event_msg", ["type": "task_started", "turn_id": "turn-1"])
+  }
+
+  deinit { try? FileManager.default.removeItem(at: root) }
+
+  func append(_ type: String, _ payload: [String: Any]) throws {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    transcript.append(try JSONSerialization.data(withJSONObject: [
+      "timestamp": formatter.string(from: Date()), "type": type, "payload": payload,
+    ]))
+    transcript.append(0x0A)
+    try transcript.write(to: sessionURL, options: .atomic)
+  }
+
+  func ask(name: String, callID: String, count: Int = 1) throws {
+    let arguments = try JSONSerialization.data(withJSONObject: [
+      "questions": Array(repeating: ["title": "Choose"], count: count),
+    ])
+    try append("response_item", [
+      "type": "function_call", "name": name, "call_id": callID,
+      "arguments": String(decoding: arguments, as: UTF8.self),
+    ])
+  }
+
+  func answer(callID: String, indices: [Int]) throws {
+    let answers = try indices.map { index -> [String: String] in
+      let id = try JSONSerialization.data(withJSONObject: ["request_user_input_async", callID, index])
+      return ["questionItemId": String(decoding: id, as: UTF8.self), "answer": "Selected"]
+    }
+    let json = try JSONSerialization.data(withJSONObject: answers)
+    let text = "<send_user_message_question_reply>\n\(String(decoding: json, as: UTF8.self))\n</send_user_message_question_reply>"
+    try append("response_item", [
+      "type": "message", "role": "user", "content": [["type": "input_text", "text": text]],
+    ])
+  }
+}
+
 final class CodexActivityTests: XCTestCase {
+  @MainActor
+  func testSynchronousQuestionTurnsRedUntilItsOwnToolResponse() throws {
+    for name in ["request_user_input", "functions.request_user_input"] {
+      let session = try QuestionSession()
+      try session.ask(name: name, callID: "question")
+      session.monitor.refresh()
+      XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+      XCTAssertEqual(session.monitor.state.title, "等待回复")
+      XCTAssertEqual(TaskTrafficLight.activeIndex(state: session.monitor.state, mode: .codex), 0)
+
+      try session.append("response_item", [
+        "type": "function_call_output", "call_id": "unrelated", "output": "done",
+      ])
+      session.monitor.refresh()
+      XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+
+      try session.append("response_item", [
+        "type": "function_call_output", "call_id": "question", "output": "{\"answers\":{}}",
+      ])
+      session.monitor.refresh()
+      XCTAssertEqual(session.monitor.state, .running)
+      XCTAssertEqual(TaskTrafficLight.activeIndex(state: session.monitor.state, mode: .codex), 1)
+      try session.append("event_msg", ["type": "task_complete", "turn_id": "turn-1"])
+      session.monitor.refresh()
+      XCTAssertEqual(session.monitor.state, .finished)
+    }
+  }
+
+  @MainActor
+  func testAsyncQuestionAcknowledgementAndPartialAnswersKeepRed() throws {
+    let session = try QuestionSession()
+    try session.ask(name: "request_user_input_async", callID: "question", count: 2)
+    try session.append("response_item", [
+      "type": "function_call_output", "call_id": "question", "output": "{\"accepted\":true}",
+    ])
+    try session.append("response_item", ["type": "function_call", "name": "exec", "call_id": "work"])
+    try session.append("response_item", [
+      "type": "function_call_output", "call_id": "work", "output": "done",
+    ])
+    try session.answer(callID: "another-question", indices: [0, 1])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+    // Cached polling must retain the pending question.
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+
+    try session.answer(callID: "question", indices: [0])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+    try session.answer(callID: "question", indices: [1])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .running)
+  }
+
+  @MainActor
+  func testAnsweringNewerQuestionDoesNotClearOlderPendingQuestion() throws {
+    let session = try QuestionSession()
+    try session.ask(name: "request_user_input_async", callID: "first")
+    try session.ask(name: "functions.request_user_input_async", callID: "second")
+    try session.answer(callID: "second", indices: [0])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+    try session.answer(callID: "first", indices: [0])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .running)
+  }
+
+  @MainActor
+  func testTaskLifecycleAndRejectedRequestClearPendingQuestion() throws {
+    for (event, state) in [("task_complete", CodexActivityState.finished),
+                           ("turn_aborted", .finished), ("task_started", .running)] {
+      let session = try QuestionSession()
+      try session.ask(name: "request_user_input_async", callID: "question")
+      try session.append("event_msg", ["type": event, "turn_id": "turn-2"])
+      session.monitor.refresh()
+      XCTAssertEqual(session.monitor.state, state)
+    }
+    let session = try QuestionSession()
+    try session.ask(name: "request_user_input_async", callID: "rejected")
+    try session.append("response_item", [
+      "type": "function_call_output", "call_id": "rejected", "output": ["accepted": false],
+    ])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .running)
+  }
+
+  @MainActor
+  func testPendingQuestionBeforeTailChunkSurvivesQuotaEventsAndOldRunningHook() throws {
+    let session = try QuestionSession()
+    try session.ask(name: "request_user_input_async", callID: "question")
+    try session.append("event_msg", [
+      "type": "agent_message", "message": String(repeating: "x", count: 300_000),
+    ])
+    try session.append("event_msg", [
+      "type": "token_count", "rate_limits": ["primary": ["used_percent": 20]],
+    ])
+    try FileManager.default.createDirectory(at: session.hooksURL, withIntermediateDirectories: true)
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    try encoder.encode(CodexActivityRecord(
+      schemaVersion: 2, sessionID: session.sessionID, turnID: "turn-1",
+      eventName: "UserPromptSubmit", state: .running,
+      updatedAt: Date().addingTimeInterval(-180)
+    )).write(to: session.hooksURL.appendingPathComponent("hook.json"))
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+    try session.answer(callID: "question", indices: [0])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .running)
+  }
+
+  @MainActor
+  func testQuotaResetDoesNotClearPendingQuestionAndAnswerRestoresRunning() throws {
+    let session = try QuestionSession()
+    try session.ask(name: "request_user_input_async", callID: "question")
+    try session.append("event_msg", [
+      "type": "token_count", "rate_limits": [
+        "primary": ["used_percent": 100, "resets_at": 1],
+      ],
+    ])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .awaitingUserInput)
+    try session.answer(callID: "question", indices: [0])
+    session.monitor.refresh()
+    XCTAssertEqual(session.monitor.state, .running)
+  }
+
   @MainActor
   func testQuotaStopTurnsRedAndNewTaskRecovers() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

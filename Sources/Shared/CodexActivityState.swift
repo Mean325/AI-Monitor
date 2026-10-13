@@ -5,6 +5,7 @@ enum CodexActivityState: String, Codable, Equatable, Sendable {
   case finished
   case running
   case awaitingAuthorization
+  case awaitingUserInput
   case toolFailed
   case quotaExhausted
 
@@ -14,6 +15,7 @@ enum CodexActivityState: String, Codable, Equatable, Sendable {
     case .finished: return "任务结束"
     case .running: return "任务进行中"
     case .awaitingAuthorization: return "等待授权"
+    case .awaitingUserInput: return "等待回复"
     case .toolFailed: return "工具执行失败"
     case .quotaExhausted: return "用量不足"
     }
@@ -25,7 +27,7 @@ enum CodexActivityState: String, Codable, Equatable, Sendable {
     case .finished: return 1
     case .running: return 2
     case .quotaExhausted: return 3
-    case .awaitingAuthorization: return 4
+    case .awaitingAuthorization, .awaitingUserInput: return 4
     case .toolFailed: return 5
     }
   }

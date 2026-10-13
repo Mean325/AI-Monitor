@@ -1730,7 +1730,7 @@ struct SettingsView: View {
     case .idle: return .green
     case .finished: return .green
     case .running: return .yellow
-    case .awaitingAuthorization: return .red
+    case .awaitingAuthorization, .awaitingUserInput: return .red
     case .toolFailed, .quotaExhausted: return .red
     }
   }
@@ -1749,7 +1749,7 @@ struct SettingsView: View {
     case .idle: return .green
     case .finished: return .green
     case .running: return .yellow
-    case .awaitingAuthorization: return .red
+    case .awaitingAuthorization, .awaitingUserInput: return .red
     case .toolFailed, .quotaExhausted: return .red
     }
   }
@@ -1768,7 +1768,7 @@ struct SettingsView: View {
     case .idle: return .green
     case .finished: return .green
     case .running: return .yellow
-    case .awaitingAuthorization: return .red
+    case .awaitingAuthorization, .awaitingUserInput: return .red
     case .toolFailed, .quotaExhausted: return .red
     }
   }
@@ -1778,7 +1778,7 @@ struct SettingsView: View {
     case .idle: return .green
     case .finished: return .green
     case .running: return .yellow
-    case .awaitingAuthorization: return .red
+    case .awaitingAuthorization, .awaitingUserInput: return .red
     case .toolFailed, .quotaExhausted: return .red
     }
   }

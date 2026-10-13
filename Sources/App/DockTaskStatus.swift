@@ -19,7 +19,7 @@ enum DockTaskStatusIcon {
       NSGraphicsContext.restoreGraphicsState()
       let color: NSColor
       switch state {
-      case .awaitingAuthorization, .toolFailed, .quotaExhausted:
+      case .awaitingAuthorization, .awaitingUserInput, .toolFailed, .quotaExhausted:
         color = NSColor(srgbRed: 1, green: 0.37, blue: 0.34, alpha: 1)
       case .running:
         color = NSColor(srgbRed: 1, green: 0.74, blue: 0.18, alpha: 1)

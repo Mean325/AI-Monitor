@@ -93,7 +93,7 @@ enum SmartDisplayResolver {
   private static func takeoverPriority(for state: CodexActivityState) -> Int {
     switch state {
     case .toolFailed: return 3
-    case .awaitingAuthorization: return 2
+    case .awaitingAuthorization, .awaitingUserInput: return 2
     case .running: return 1
     case .finished, .idle, .quotaExhausted: return 0
     }
@@ -1161,7 +1161,7 @@ final class AppModel: ObservableObject {
   ) {
     let resolved: CodexActivityState
     switch state {
-    case .toolFailed, .awaitingAuthorization:
+    case .toolFailed, .awaitingAuthorization, .awaitingUserInput:
       // A known tool error or pending request keeps its own cause and label.
       resolved = state
     default:
