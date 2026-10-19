@@ -270,6 +270,21 @@ struct MenuBarContentView: View {
             } ?? "--"
           )
         }
+      case .gemini:
+        HStack(spacing: 10) {
+          summaryCell(
+            title: "今日 Token",
+            value: model.geminiSnapshot.map {
+              ClaudeCodeTokenFormatter.string(from: $0.todayTokens)
+            } ?? "--"
+          )
+          summaryCell(
+            title: "近 7 天",
+            value: model.geminiSnapshot.map {
+              ClaudeCodeTokenFormatter.string(from: $0.weekTokens)
+            } ?? "--"
+          )
+        }
       case .qoder:
         HStack(spacing: 10) {
           summaryCell(
@@ -314,6 +329,7 @@ struct MenuBarContentView: View {
     switch model.displayMode {
     case .codex: return "Codex 用量卡片"
     case .claudeCode: return "Claude Code 用量卡片"
+    case .gemini: return "Gemini 任务卡片"
     case .qoder: return "Qoder 用量卡片"
     case .grok: return "Grok 余量卡片"
     case .customImage: return "Linx68 自定义图片"

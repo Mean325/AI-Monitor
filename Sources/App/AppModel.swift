@@ -8,6 +8,7 @@ enum DisplayMode: String, CaseIterable, Identifiable {
   case claudeCode
   case qoder
   case grok
+  case gemini
   case customImage
 
   var id: String { rawValue }
@@ -18,6 +19,7 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     case .claudeCode: return "Claude Code"
     case .qoder: return "Qoder"
     case .grok: return "Grok"
+    case .gemini: return "Gemini"
     case .customImage: return "自定义图片"
     }
   }
@@ -28,6 +30,7 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     case .claudeCode: return "sun.max.fill"
     case .qoder: return "wand.and.stars"
     case .grok: return "sparkles"
+    case .gemini: return "sparkle"
     case .customImage: return "photo"
     }
   }
@@ -38,6 +41,7 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     case .claudeCode: return "LogoClaude"
     case .qoder: return "LogoQoder"
     case .grok: return "LogoGrok"
+    case .gemini: return "LogoGemini"
     case .customImage: return nil
     }
   }
@@ -45,7 +49,7 @@ enum DisplayMode: String, CaseIterable, Identifiable {
   var isUsageMode: Bool {
     switch self {
     case .customImage: return false
-    case .codex, .claudeCode, .qoder, .grok: return true
+    case .codex, .claudeCode, .qoder, .grok, .gemini: return true
     }
   }
 }
@@ -115,8 +119,9 @@ enum SmartDisplayResolver {
 
   private static func stableOrder(_ mode: DisplayMode) -> Int {
     switch mode {
-    case .codex: return 4
-    case .claudeCode: return 3
+    case .codex: return 5
+    case .claudeCode: return 4
+    case .gemini: return 3
     case .qoder: return 2
     case .grok: return 1
     case .customImage: return 0
@@ -164,6 +169,9 @@ final class AppModel: ObservableObject {
   @Published private(set) var qoderActivityState: CodexActivityState = .idle
   @Published private(set) var grokSnapshot: GrokUsageSnapshot?
   @Published private(set) var grokActivityState: CodexActivityState = .idle
+  @Published private(set) var geminiSnapshot: GeminiUsageSnapshot?
+  @Published private(set) var geminiActivityState: CodexActivityState = .idle
+  @Published private(set) var geminiHookInstallationState: CodexHookInstallationState = .notInstalled
   @Published private(set) var isLinxEnabled: Bool
   @Published private(set) var bluetoothKeyboardInfo: BluetoothKeyboardInfo?
   @Published private(set) var lastPushRequest: HTTPPushRequestRecord?
@@ -199,6 +207,7 @@ final class AppModel: ObservableObject {
     switch presentedAIMode {
     case .codex: return codexActivityState
     case .claudeCode: return claudeActivityState
+    case .gemini: return geminiActivityState
     case .qoder: return qoderActivityState
     case .grok: return grokActivityState
     case .customImage: return nil
@@ -208,7 +217,7 @@ final class AppModel: ObservableObject {
   var selectedUsageRemainingPercent: Int? {
     switch presentedAIMode {
     case .codex: return snapshot?.remainingPercent
-    case .claudeCode: return nil
+    case .claudeCode, .gemini: return nil
     case .qoder: return qoderCreditSnapshot?.remainingPercent
     case .grok: return grokSnapshot?.remainingPercent
     case .customImage: return nil
@@ -232,10 +241,12 @@ final class AppModel: ObservableObject {
     if smartSwitchEnabled {
       activityMonitor.refresh()
       claudeActivityMonitor.refresh()
+      geminiActivityMonitor.refresh()
       qoderActivityMonitor.refresh()
       grokActivityMonitor.refresh()
       applyCodexActivity(activityMonitor.state)
       updateClaudeActivity(claudeActivityMonitor.state)
+      updateGeminiActivity(geminiActivityMonitor.state)
       updateQoderActivity(qoderActivityMonitor.state)
       updateGrokActivity(grokActivityMonitor.state)
       reevaluateSmartDisplayMode()
@@ -250,6 +261,9 @@ final class AppModel: ObservableObject {
     case .claudeCode:
       claudeActivityMonitor.refresh()
       claudeActivityState = claudeActivityMonitor.state
+    case .gemini:
+      geminiActivityMonitor.refresh()
+      geminiActivityState = geminiActivityMonitor.state
     case .qoder:
       qoderActivityMonitor.refresh()
       qoderActivityState = qoderActivityMonitor.state
@@ -299,6 +313,9 @@ final class AppModel: ObservableObject {
   private let qoderLogClient: QoderLogClient
   private let grokUsageClient: any GrokUsageFetching
   private let grokActivityMonitor: any CodexActivityMonitoring
+  private let geminiUsageClient: any GeminiUsageFetching
+  private let geminiActivityMonitor: any CodexActivityMonitoring
+  private let geminiHookInstaller: GeminiHookInstaller
   private let customImageDirectory: URL
   private var schedulerTask: Task<Void, Never>?
   private var pendingModeActionTask: Task<Void, Never>?
@@ -306,6 +323,7 @@ final class AppModel: ObservableObject {
   private var claudePendingActivityUploadTask: Task<Void, Never>?
   private var qoderPendingActivityUploadTask: Task<Void, Never>?
   private var grokPendingActivityUploadTask: Task<Void, Never>?
+  private var geminiPendingActivityUploadTask: Task<Void, Never>?
   private var wakeObserver: NSObjectProtocol?
   private var launchObserver: NSObjectProtocol?
   private var lastUploadedHash: String?
@@ -333,6 +351,9 @@ final class AppModel: ObservableObject {
     qoderActivityMonitor: (any CodexActivityMonitoring)? = nil,
     grokUsageClient: any GrokUsageFetching = GrokUsageClient(),
     grokActivityMonitor: (any CodexActivityMonitoring)? = nil,
+    geminiUsageClient: any GeminiUsageFetching = GeminiUsageClient(),
+    geminiActivityMonitor: (any CodexActivityMonitoring)? = nil,
+    geminiHookInstaller: GeminiHookInstaller = GeminiHookInstaller(),
     customImageDirectory: URL? = nil,
     localNetworkRetryDelayNanoseconds: UInt64 = 2_000_000_000,
     localNetworkRetryWindowNanoseconds: UInt64 = 45_000_000_000
@@ -346,6 +367,7 @@ final class AppModel: ObservableObject {
       )
     let resolvedQoderActivityMonitor = qoderActivityMonitor ?? QoderActivityMonitor()
     let resolvedGrokActivityMonitor = grokActivityMonitor ?? GrokActivityMonitor()
+    let resolvedGeminiActivityMonitor = geminiActivityMonitor ?? GeminiActivityMonitor()
     self.defaults = defaults
     isLinxEnabled = defaults.object(forKey: Keys.linxEnabled) as? Bool ?? true
     smartSwitchEnabled = defaults.bool(forKey: Keys.smartSwitchEnabled)
@@ -367,6 +389,9 @@ final class AppModel: ObservableObject {
     self.qoderLogClient = QoderLogClient()
     self.grokUsageClient = grokUsageClient
     self.grokActivityMonitor = resolvedGrokActivityMonitor
+    self.geminiUsageClient = geminiUsageClient
+    self.geminiActivityMonitor = resolvedGeminiActivityMonitor
+    self.geminiHookInstaller = geminiHookInstaller
     self.customImageDirectory = customImageDirectory ?? Self.defaultCustomImageDirectory
     self.localNetworkRetryDelayNanoseconds = localNetworkRetryDelayNanoseconds
     self.localNetworkRetryWindowNanoseconds = localNetworkRetryWindowNanoseconds
@@ -376,6 +401,8 @@ final class AppModel: ObservableObject {
     claudeHookInstallationState = claudeHookInstaller.installationState()
     qoderActivityState = resolvedQoderActivityMonitor.state
     grokActivityState = resolvedGrokActivityMonitor.state
+    geminiActivityState = resolvedGeminiActivityMonitor.state
+    geminiHookInstallationState = geminiHookInstaller.installationState()
     bluetoothKeyboardInfo = nil
     lastPushRequest = nil
 
@@ -433,6 +460,7 @@ final class AppModel: ObservableObject {
     claudePendingActivityUploadTask?.cancel()
     qoderPendingActivityUploadTask?.cancel()
     grokPendingActivityUploadTask?.cancel()
+    geminiPendingActivityUploadTask?.cancel()
     localNetworkRecoveryTask?.cancel()
     bluetoothRefreshTask?.cancel()
     if let wakeObserver {
@@ -478,6 +506,18 @@ final class AppModel: ObservableObject {
       self?.handleGrokActivityChange(state)
     }
     grokActivityState = grokActivityMonitor.state
+
+    geminiActivityMonitor.onStateChange = { [weak self] state in
+      self?.handleGeminiActivityChange(state)
+    }
+    geminiActivityMonitor.onEventObserved = { [weak self] date in
+      self?.handleGeminiHookEvent(date)
+      self?.reevaluateSmartDisplayMode()
+    }
+    geminiActivityState = geminiActivityMonitor.state
+    if let lastEventDate = geminiActivityMonitor.lastEventDate {
+      handleGeminiHookEvent(lastEventDate)
+    }
     reconcileActivityMonitors()
     reevaluateSmartDisplayMode()
     updatePreview()
@@ -630,6 +670,7 @@ final class AppModel: ObservableObject {
     claudePendingActivityUploadTask?.cancel()
     qoderPendingActivityUploadTask?.cancel()
     grokPendingActivityUploadTask?.cancel()
+    geminiPendingActivityUploadTask?.cancel()
     updatePreview()
 
     switch mode {
@@ -642,6 +683,9 @@ final class AppModel: ObservableObject {
     case .claudeCode:
       usageQueryState = .querying
       statusText = "准备读取 Claude Code"
+    case .gemini:
+      usageQueryState = .querying
+      statusText = "准备读取 Gemini"
     case .qoder:
       usageQueryState = .querying
       statusText = "准备读取 Qoder"
@@ -693,10 +737,12 @@ final class AppModel: ObservableObject {
       activeAIMonitor = nil
       activityMonitor.stop()
       claudeActivityMonitor.stop()
+      geminiActivityMonitor.stop()
       qoderActivityMonitor.stop()
       grokActivityMonitor.stop()
       activityMonitor.start()
       claudeActivityMonitor.start()
+      geminiActivityMonitor.start()
       qoderActivityMonitor.start()
       grokActivityMonitor.start()
       return
@@ -706,6 +752,7 @@ final class AppModel: ObservableObject {
     monitorsFollowAllProviders = false
     activityMonitor.stop()
     claudeActivityMonitor.stop()
+    geminiActivityMonitor.stop()
     qoderActivityMonitor.stop()
     grokActivityMonitor.stop()
     activeAIMonitor = selectedAIMode
@@ -716,6 +763,9 @@ final class AppModel: ObservableObject {
     case .claudeCode:
       claudeActivityMonitor.start()
       claudeActivityState = claudeActivityMonitor.state
+    case .gemini:
+      geminiActivityMonitor.start()
+      geminiActivityState = geminiActivityMonitor.state
     case .qoder:
       qoderActivityMonitor.start()
       qoderActivityState = qoderActivityMonitor.state
@@ -732,6 +782,7 @@ final class AppModel: ObservableObject {
       states: [
         (.codex, codexActivityState, activityMonitor.lastEventDate),
         (.claudeCode, claudeActivityState, claudeActivityMonitor.lastEventDate),
+        (.gemini, geminiActivityState, geminiActivityMonitor.lastEventDate),
         (.qoder, qoderActivityState, qoderActivityMonitor.lastEventDate),
         (.grok, grokActivityState, grokActivityMonitor.lastEventDate),
       ],
@@ -895,6 +946,45 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func installGeminiActivityHooks() {
+    do {
+      try geminiHookInstaller.install()
+      geminiHookInstallationState = .configured
+      lastError = nil
+      statusText = "Gemini 状态监控 Hook 已配置"
+    } catch {
+      geminiHookInstallationState = .failed(error.localizedDescription)
+      lastError = error.localizedDescription
+      statusText = "Gemini Hook 安装失败"
+    }
+  }
+
+  var geminiHookStatusText: String {
+    switch geminiHookInstallationState {
+    case .notInstalled:
+      return "未安装"
+    case .configured:
+      return "已配置 · 待 Gemini 生效"
+    case .active(let date):
+      return "已生效 · \(Self.dateTimeFormatter.string(from: date))"
+    case .failed(let message):
+      return message
+    }
+  }
+
+  var geminiDataStatusText: String {
+    if geminiHookInstallationState.isConfigured {
+      if let lastEventDate = geminiActivityMonitor.lastEventDate {
+        return "Hook 监控中 · \(Self.dateTimeFormatter.string(from: lastEventDate))"
+      }
+      return "已配置 Hook · 等待活动"
+    }
+    if let lastEventDate = geminiActivityMonitor.lastEventDate {
+      return "会话日志 · \(Self.dateTimeFormatter.string(from: lastEventDate))"
+    }
+    return "会话日志 · 等待 Gemini 活动"
+  }
+
   var qoderDataStatusText: String {
     if let monitor = qoderActivityMonitor as? QoderActivityMonitor,
       !monitor.projectsDirectoryExists
@@ -968,6 +1058,25 @@ final class AppModel: ObservableObject {
         rendered = try UsageCardRenderer.render(
           claudeSnapshot: latestSnapshot,
           activityState: claudeActivityState,
+          safeAreaHeight: safeAreaHeight,
+          jpegQuality: jpegQuality,
+          colorScheme: usageCardColorScheme,
+          design: usageCardDesign
+        )
+      case .gemini:
+        let latestSnapshot = try await geminiUsageClient.fetch()
+        guard displayMode == .gemini else {
+          usageQueryState = .idle
+          statusText = customSourceImage == nil ? "请选择一张图片" : "用量刷新已暂停"
+          return
+        }
+        didCompleteQuery = true
+        usageQueryState = .succeeded
+        geminiSnapshot = latestSnapshot
+        lastRefreshDate = Date()
+        rendered = try UsageCardRenderer.render(
+          geminiSnapshot: latestSnapshot,
+          activityState: geminiActivityState,
           safeAreaHeight: safeAreaHeight,
           jpegQuality: jpegQuality,
           colorScheme: usageCardColorScheme,
@@ -1492,6 +1601,93 @@ final class AppModel: ObservableObject {
     }
   }
 
+  private func handleGeminiHookEvent(_ date: Date) {
+    guard geminiHookInstallationState.isConfigured else { return }
+    if case .active(let currentDate) = geminiHookInstallationState,
+      currentDate >= date
+    {
+      return
+    }
+    geminiHookInstallationState = .active(date)
+  }
+
+  private func handleGeminiActivityChange(_ state: CodexActivityState) {
+    updateGeminiActivity(state, uploadIfChanged: true)
+  }
+
+  private func updateGeminiActivity(
+    _ state: CodexActivityState,
+    uploadIfChanged: Bool = false
+  ) {
+    guard geminiActivityState != state else { return }
+    geminiActivityState = state
+    let previousMode = displayMode
+    reevaluateSmartDisplayMode()
+    updatePreview()
+    guard displayMode == previousMode else { return }
+    guard uploadIfChanged, hasStarted, isLinxEnabled, displayMode == .gemini else { return }
+    scheduleGeminiActivityUpload()
+  }
+
+  private func scheduleGeminiActivityUpload() {
+    geminiPendingActivityUploadTask?.cancel()
+    geminiPendingActivityUploadTask = Task { [weak self] in
+      guard let self else { return }
+      while self.isSyncing {
+        do {
+          try await Task.sleep(nanoseconds: 50_000_000)
+        } catch {
+          return
+        }
+      }
+      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == .gemini else { return }
+      await self.uploadCurrentGeminiActivityCard()
+    }
+  }
+
+  private func uploadCurrentGeminiActivityCard() async {
+    guard isLinxEnabled, displayMode == .gemini, !isSyncing else { return }
+    isSyncing = true
+    var didStartUpload = false
+    var connectionStateBeforeUpload: KeyboardConnectionState?
+    defer { isSyncing = false }
+
+    do {
+      let rendered = try UsageCardRenderer.render(
+        geminiSnapshot: geminiSnapshot,
+        activityState: geminiActivityState,
+        safeAreaHeight: safeAreaHeight,
+        jpegQuality: jpegQuality,
+        colorScheme: usageCardColorScheme,
+        design: usageCardDesign
+      )
+      previewImage = rendered.image
+
+      let hash = SHA256.hash(data: rendered.data).map { String(format: "%02x", $0) }.joined()
+      guard hash != lastUploadedHash else { return }
+
+      connectionStateBeforeUpload = keyboardConnectionState
+      didStartUpload = true
+      let uploadEndpoint = endpoint
+      let result = try await pushJPEG(rendered.data, endpoint: uploadEndpoint)
+      keyboardConnectionState = endpoint == uploadEndpoint ? .connected : .disconnected
+      lastUploadedHash = hash
+      lastUploadDate = Date()
+      lastError = nil
+      statusText = "\(geminiActivityState.title) · HTTP \(result.statusCode)"
+    } catch {
+      guard isLinxEnabled else { return }
+      if didStartUpload {
+        keyboardConnectionState = connectionStateAfterUploadFailure(
+          error,
+          previousState: connectionStateBeforeUpload ?? .disconnected
+        )
+      }
+      lastError = error.localizedDescription
+      statusText = "状态卡片推送失败"
+    }
+  }
+
   private func pushJPEG(_ data: Data, endpoint uploadEndpoint: String) async throws -> ImageUploadResult {
     let startedAt = Date()
     lastPushRequest = HTTPPushRequestRecord(
@@ -1648,6 +1844,15 @@ final class AppModel: ObservableObject {
         previewImage = try UsageCardRenderer.render(
           grokSnapshot: grokSnapshot ?? .sample,
           activityState: grokActivityState,
+          safeAreaHeight: safeAreaHeight,
+          jpegQuality: jpegQuality,
+          colorScheme: usageCardColorScheme,
+          design: usageCardDesign
+        ).image
+      case .gemini:
+        previewImage = try UsageCardRenderer.render(
+          geminiSnapshot: geminiSnapshot ?? .sample,
+          activityState: geminiActivityState,
           safeAreaHeight: safeAreaHeight,
           jpegQuality: jpegQuality,
           colorScheme: usageCardColorScheme,

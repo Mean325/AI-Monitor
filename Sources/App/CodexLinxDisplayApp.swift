@@ -13,6 +13,7 @@ struct CodexLinxDisplayApp: App {
   init() {
     let hookInstaller = CodexHookInstaller()
     let claudeHookInstaller = ClaudeCodeHookInstaller()
+    let geminiHookInstaller = GeminiHookInstaller()
     updater = UpdaterController()
     if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
       if hookInstaller.installationState() != .configured {
@@ -21,11 +22,15 @@ struct CodexLinxDisplayApp: App {
       if claudeHookInstaller.installationState() != .configured {
         try? claudeHookInstaller.install()
       }
+      if geminiHookInstaller.installationState() != .configured {
+        try? geminiHookInstaller.install()
+      }
     }
 
     let model = AppModel(
       hookInstaller: hookInstaller,
-      claudeHookInstaller: claudeHookInstaller
+      claudeHookInstaller: claudeHookInstaller,
+      geminiHookInstaller: geminiHookInstaller
     )
     _model = StateObject(wrappedValue: model)
     dockTaskStatus = DockTaskStatusController(model: model)
@@ -79,6 +84,12 @@ struct CodexLinxDisplayApp: App {
         return "CC \(ClaudeCodeTokenFormatter.string(from: snapshot.todayTokens))"
       }
       return "Claude Code"
+    }
+    if model.displayMode == .gemini {
+      if let snapshot = model.geminiSnapshot, snapshot.hasData {
+        return "Gemini \(ClaudeCodeTokenFormatter.string(from: snapshot.todayTokens))"
+      }
+      return "Gemini"
     }
     if model.displayMode == .qoder {
       if let credit = model.qoderCreditSnapshot, credit.hasData {
@@ -316,6 +327,8 @@ enum MenuBarStatusIcon {
       drawCodexLogo(opacity: opacity)
     case .claudeCode:
       drawClaudeLogo(opacity: opacity)
+    case .gemini:
+      drawGeminiLogo(opacity: opacity)
     case .qoder:
       drawQoderLogo(opacity: opacity)
     case .grok:
@@ -323,6 +336,41 @@ enum MenuBarStatusIcon {
     case .customImage:
       drawImageLogo(opacity: opacity)
     }
+  }
+
+  private static func drawGeminiLogo(opacity: Double) {
+    NSColor.black.withAlphaComponent(opacity).setStroke()
+    let star = NSBezierPath()
+    star.lineWidth = 1.3
+    star.lineCapStyle = .round
+    star.lineJoinStyle = .round
+    let center = NSPoint(x: 9, y: 9)
+    let outer: CGFloat = 4.8
+    let inner: CGFloat = 1.4
+    star.move(to: NSPoint(x: center.x, y: center.y - outer))
+    star.curve(
+      to: NSPoint(x: center.x + outer, y: center.y),
+      controlPoint1: NSPoint(x: center.x + inner, y: center.y - inner),
+      controlPoint2: NSPoint(x: center.x + inner, y: center.y - inner)
+    )
+    star.curve(
+      to: NSPoint(x: center.x, y: center.y + outer),
+      controlPoint1: NSPoint(x: center.x + inner, y: center.y + inner),
+      controlPoint2: NSPoint(x: center.x + inner, y: center.y + inner)
+    )
+    star.curve(
+      to: NSPoint(x: center.x - outer, y: center.y),
+      controlPoint1: NSPoint(x: center.x - inner, y: center.y + inner),
+      controlPoint2: NSPoint(x: center.x - inner, y: center.y + inner)
+    )
+    star.curve(
+      to: NSPoint(x: center.x, y: center.y - outer),
+      controlPoint1: NSPoint(x: center.x - inner, y: center.y - inner),
+      controlPoint2: NSPoint(x: center.x - inner, y: center.y - inner)
+    )
+    star.close()
+    NSColor.black.withAlphaComponent(opacity).setFill()
+    star.fill()
   }
 
   private static func drawCodexLogo(opacity: Double) {

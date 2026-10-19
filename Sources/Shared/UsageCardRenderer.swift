@@ -253,6 +253,48 @@ enum UsageCardRenderer {
       jpegQuality: jpegQuality
     )
   }
+
+  static func render(
+    geminiSnapshot: GeminiUsageSnapshot?,
+    activityState: CodexActivityState = .idle,
+    safeAreaHeight: CGFloat,
+    jpegQuality: Double,
+    colorScheme: UsageCardColorScheme = .deepSpace,
+    design: UsageCardDesign = .minimalColumn
+  ) throws -> RenderedUsageCard {
+    let view = GeminiCardView(
+      snapshot: geminiSnapshot,
+      activityState: activityState,
+      safeAreaHeight: safeAreaHeight,
+      colorScheme: colorScheme,
+      design: design.resolved(for: .gemini)
+    )
+      .frame(width: UsageCardLayout.width, height: UsageCardLayout.height)
+
+    let renderer = ImageRenderer(content: view)
+    renderer.proposedSize = ProposedViewSize(
+      width: UsageCardLayout.width, height: UsageCardLayout.height)
+    renderer.scale = 1
+    renderer.isOpaque = true
+
+    guard let cgImage = renderer.cgImage else {
+      throw UsageCardRendererError.renderFailed
+    }
+
+    let previewRenderer = ImageRenderer(content: view)
+    previewRenderer.proposedSize = renderer.proposedSize
+    previewRenderer.scale = previewScale
+    previewRenderer.isOpaque = true
+
+    guard let previewCGImage = previewRenderer.cgImage else {
+      throw UsageCardRendererError.renderFailed
+    }
+    return try makeRenderedImage(
+      cgImage: cgImage,
+      previewCGImage: previewCGImage,
+      jpegQuality: jpegQuality
+    )
+  }
 }
 
 private func makeRenderedImage(

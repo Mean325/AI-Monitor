@@ -69,22 +69,29 @@ final class AppModelTests: XCTestCase {
     let claude = FakeCodexActivityMonitor()
     let qoder = FakeCodexActivityMonitor()
     let grok = FakeCodexActivityMonitor()
+    let gemini = FakeCodexActivityMonitor()
     let model = AppModel(defaults: defaults, codexClient: FakeCodexClient(),
       imageAPIClient: FakeImageClient(), activityMonitor: codex,
-      claudeActivityMonitor: claude, qoderActivityMonitor: qoder, grokActivityMonitor: grok)
+      claudeActivityMonitor: claude, qoderActivityMonitor: qoder, grokActivityMonitor: grok,
+      geminiActivityMonitor: gemini)
     model.start()
     XCTAssertTrue(codex.isStarted)
     XCTAssertFalse(claude.isStarted)
     XCTAssertFalse(qoder.isStarted)
     XCTAssertFalse(grok.isStarted)
-    model.setSelectedAI(.grok)
+    XCTAssertFalse(gemini.isStarted)
+    model.setSelectedAI(.gemini)
     XCTAssertFalse(codex.isStarted)
+    XCTAssertTrue(gemini.isStarted)
+    model.setSelectedAI(.grok)
+    XCTAssertFalse(gemini.isStarted)
     XCTAssertTrue(grok.isStarted)
     model.setDisplayMode(.customImage)
     model.setSelectedAI(.qoder)
     XCTAssertFalse(grok.isStarted)
     XCTAssertTrue(qoder.isStarted)
     XCTAssertFalse(claude.isStarted)
+    XCTAssertFalse(gemini.isStarted)
   }
 
   @MainActor
@@ -97,12 +104,14 @@ final class AppModelTests: XCTestCase {
     let claude = FakeCodexActivityMonitor()
     let qoder = FakeCodexActivityMonitor()
     let grok = FakeCodexActivityMonitor()
+    let gemini = FakeCodexActivityMonitor()
     let model = AppModel(
       defaults: defaults,
       activityMonitor: codex,
       claudeActivityMonitor: claude,
       qoderActivityMonitor: qoder,
-      grokActivityMonitor: grok
+      grokActivityMonitor: grok,
+      geminiActivityMonitor: gemini
     )
 
     model.start()
@@ -112,6 +121,7 @@ final class AppModelTests: XCTestCase {
     XCTAssertTrue(claude.isStarted)
     XCTAssertTrue(qoder.isStarted)
     XCTAssertTrue(grok.isStarted)
+    XCTAssertTrue(gemini.isStarted)
     XCTAssertTrue(defaults.bool(forKey: "smartSwitchEnabled"))
 
     claude.send(.running)
@@ -122,6 +132,12 @@ final class AppModelTests: XCTestCase {
     XCTAssertEqual(model.displayMode, .codex)
     XCTAssertEqual(model.selectedActivityState, .awaitingUserInput)
     codex.send(.idle)
+    XCTAssertEqual(model.displayMode, .claudeCode)
+
+    gemini.send(.awaitingUserInput)
+    XCTAssertEqual(model.displayMode, .gemini)
+    XCTAssertEqual(model.presentedAIMode, .gemini)
+    gemini.send(.idle)
     XCTAssertEqual(model.displayMode, .claudeCode)
 
     grok.send(.awaitingAuthorization)
@@ -150,7 +166,8 @@ final class AppModelTests: XCTestCase {
     let grok = FakeCodexActivityMonitor()
     let model = AppModel(defaults: defaults, codexClient: ExhaustedCodexClient(),
       activityMonitor: codex, claudeActivityMonitor: FakeCodexActivityMonitor(),
-      qoderActivityMonitor: FakeCodexActivityMonitor(), grokActivityMonitor: grok)
+      qoderActivityMonitor: FakeCodexActivityMonitor(), grokActivityMonitor: grok,
+      geminiActivityMonitor: FakeCodexActivityMonitor())
     await model.synchronize(upload: false, forceUpload: false)
     model.setLinxEnabled(false)
     model.start()
@@ -184,7 +201,8 @@ final class AppModelTests: XCTestCase {
     let grok = FakeCodexActivityMonitor()
     let model = AppModel(defaults: defaults, activityMonitor: codex,
       claudeActivityMonitor: FakeCodexActivityMonitor(),
-      qoderActivityMonitor: FakeCodexActivityMonitor(), grokActivityMonitor: grok)
+      qoderActivityMonitor: FakeCodexActivityMonitor(), grokActivityMonitor: grok,
+      geminiActivityMonitor: FakeCodexActivityMonitor())
     model.start()
     model.setSmartSwitchEnabled(true)
     codex.send(.running)
@@ -216,12 +234,14 @@ final class AppModelTests: XCTestCase {
     let claude = FakeCodexActivityMonitor()
     let qoder = FakeCodexActivityMonitor()
     let grok = FakeCodexActivityMonitor()
+    let gemini = FakeCodexActivityMonitor()
     let model = AppModel(
       defaults: defaults,
       activityMonitor: codex,
       claudeActivityMonitor: claude,
       qoderActivityMonitor: qoder,
-      grokActivityMonitor: grok
+      grokActivityMonitor: grok,
+      geminiActivityMonitor: gemini
     )
 
     model.start()
@@ -234,6 +254,7 @@ final class AppModelTests: XCTestCase {
     XCTAssertFalse(model.isSmartSwitchActive)
     XCTAssertTrue(codex.isStarted)
     XCTAssertFalse(claude.isStarted)
+    XCTAssertFalse(gemini.isStarted)
     XCTAssertFalse(defaults.bool(forKey: "smartSwitchEnabled"))
   }
 
@@ -351,8 +372,10 @@ final class AppModelTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suite) }
     let monitor = FakeCodexActivityMonitor()
     let grokMonitor = FakeCodexActivityMonitor()
+    let geminiMonitor = FakeCodexActivityMonitor()
     let model = AppModel(defaults: defaults, activityMonitor: monitor,
-                         grokActivityMonitor: grokMonitor)
+                         grokActivityMonitor: grokMonitor,
+                         geminiActivityMonitor: geminiMonitor)
     monitor.stateOnRefresh = .running
     model.showTaskStatusInMenuBar = true
     XCTAssertEqual(model.selectedActivityState, .running)
@@ -367,6 +390,9 @@ final class AppModelTests: XCTestCase {
     grokMonitor.stateOnRefresh = .running
     model.setDisplayMode(.grok)
     XCTAssertEqual(model.selectedActivityState, .running)
+    geminiMonitor.stateOnRefresh = .awaitingUserInput
+    model.setDisplayMode(.gemini)
+    XCTAssertEqual(model.selectedActivityState, .awaitingUserInput)
   }
 
   @MainActor
@@ -422,6 +448,7 @@ final class AppModelTests: XCTestCase {
       switch mode {
       case .codex: XCTAssertEqual(model.selectedActivityState, model.codexActivityState)
       case .claudeCode: XCTAssertEqual(model.selectedActivityState, model.claudeActivityState)
+      case .gemini: XCTAssertEqual(model.selectedActivityState, model.geminiActivityState)
       case .qoder: XCTAssertEqual(model.selectedActivityState, model.qoderActivityState)
       case .grok: XCTAssertEqual(model.selectedActivityState, model.grokActivityState)
       case .customImage: XCTAssertEqual(model.selectedActivityState, model.codexActivityState)

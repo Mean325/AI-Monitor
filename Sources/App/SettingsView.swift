@@ -551,6 +551,13 @@ struct SettingsView: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+          } else if model.displayMode == .gemini {
+            Label(
+              "自动统计 Gemini token 用量与任务状态，并按设定间隔推送到键盘。",
+              systemImage: "arrow.trianglehead.2.clockwise.rotate.90"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
           } else if model.displayMode == .qoder {
             Label(
               "自动读取 Qoder 会话用量与状态，并按设定间隔推送到键盘。",
@@ -1031,6 +1038,87 @@ struct SettingsView: View {
       }
 
       }
+      if model.selectedAIMode == .gemini {
+      settingsCard(
+        title: "Gemini 状态监控",
+        subtitle: "用交通灯显示当前任务状态，并展示 Token 用量",
+        symbol: "sparkles",
+        tint: monitoringTint(for: .gemini)
+      ) {
+        statusRow(
+          title: "当前任务",
+          value: model.geminiActivityState.title,
+          valueColor: geminiActivityColor
+        )
+
+        Divider().opacity(0.5)
+
+        statusRow(
+          title: "Hook 状态",
+          value: model.geminiHookStatusText,
+          valueColor: geminiHookStatusColor
+        )
+
+        Divider().opacity(0.5)
+
+        statusRow(
+          title: "数据源",
+          value: model.geminiDataStatusText,
+          valueColor: geminiActivityColor
+        )
+
+        if let snapshot = model.geminiSnapshot {
+          Divider().opacity(0.5)
+
+          statusRow(
+            title: "今日 Token",
+            value: ClaudeCodeTokenFormatter.string(from: snapshot.todayTokens),
+            valueColor: geminiActivityColor
+          )
+
+          Divider().opacity(0.5)
+
+          statusRow(
+            title: "7天 Token",
+            value: ClaudeCodeTokenFormatter.string(from: snapshot.weekTokens),
+            valueColor: geminiActivityColor
+          )
+
+          if let modelName = snapshot.model, !modelName.isEmpty {
+            Divider().opacity(0.5)
+
+            statusRow(
+              title: "当前模型",
+              value: modelName,
+              valueColor: geminiActivityColor
+            )
+          }
+        }
+
+        HStack {
+          VStack(alignment: .leading, spacing: 3) {
+            Text("黄灯进行中 · 红灯等待提问/失败 · 绿灯完成/空闲")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Text("优先通过 ~/.gemini/config/hooks.json 实时上报；若未配置 Hook 则自动回退解析本地会话日志。")
+              .font(.caption2)
+              .foregroundStyle(.tertiary)
+          }
+
+          Spacer()
+
+          regularGlassButton {
+            model.installGeminiActivityHooks()
+          } label: {
+            Label(
+              model.geminiHookInstallationState.isConfigured ? "修复 Hook" : "安装 Hook",
+              systemImage: "wrench.and.screwdriver"
+            )
+          }
+        }
+      }
+
+      }
       if model.selectedAIMode == .qoder {
       settingsCard(
         title: "Qoder 用量监控",
@@ -1433,6 +1521,7 @@ struct SettingsView: View {
     switch mode {
     case .codex: return .teal
     case .claudeCode: return .orange
+    case .gemini: return .cyan
     case .qoder: return .purple
     case .grok: return .blue
     case .customImage: return .indigo
@@ -1670,6 +1759,7 @@ struct SettingsView: View {
     switch model.displayMode {
     case .codex: return "选择 Codex 用量卡片的色彩方案"
     case .claudeCode: return "选择 Claude Code 卡片的色彩方案"
+    case .gemini: return "选择 Gemini 卡片的色彩方案"
     case .qoder: return "选择 Qoder 卡片的色彩方案"
     case .grok: return "选择 Grok 卡片的色彩方案"
     case .customImage: return "选择卡片的色彩方案"
@@ -1688,7 +1778,7 @@ struct SettingsView: View {
       return model.grokSnapshot?.remainingPercent
     case .qoder:
       return model.qoderCreditSnapshot?.remainingPercent
-    case .claudeCode, .customImage:
+    case .claudeCode, .gemini, .customImage:
       return nil
     }
   }
@@ -1763,6 +1853,25 @@ struct SettingsView: View {
     }
   }
 
+  private var geminiActivityColor: Color {
+    switch model.geminiActivityState {
+    case .idle: return .green
+    case .finished: return .green
+    case .running: return .yellow
+    case .awaitingAuthorization, .awaitingUserInput: return .red
+    case .toolFailed, .quotaExhausted: return .red
+    }
+  }
+
+  private var geminiHookStatusColor: Color {
+    switch model.geminiHookInstallationState {
+    case .notInstalled: return .secondary
+    case .configured: return .orange
+    case .active: return brandAccent
+    case .failed: return .red
+    }
+  }
+
   private var qoderActivityColor: Color {
     switch model.qoderActivityState {
     case .idle: return .green
@@ -1826,7 +1935,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
   var searchKeywords: String {
     switch self {
-    case .monitoring: return "Codex Claude Qoder Grok AI 菜单栏 Hook 任务 状态 智能切换 自动 抢占 异常"
+    case .monitoring: return "Codex Claude Gemini Qoder Grok AI 菜单栏 Hook 任务 状态 智能切换 自动 抢占 异常"
     case .linx: return "键盘 图片 预览 颜色 主题 蓝牙 电量 同步 接口 刷新 推送"
     case .general: return "启动 登录 版本 更新 关于"
     }

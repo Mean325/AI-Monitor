@@ -538,6 +538,23 @@ final class UsageCardRendererTests: XCTestCase {
     XCTAssertNotEqual(low.data, high.data)
   }
 
+  @MainActor
+  func testGeminiCardRendersAcrossAllDesigns() throws {
+    for design in nonCodexDesigns {
+      let rendered = try UsageCardRenderer.render(
+        geminiSnapshot: .sample,
+        activityState: .running,
+        safeAreaHeight: UsageCardLayout.defaultSafeArea,
+        jpegQuality: 0.9,
+        colorScheme: .deepSpace,
+        design: design
+      )
+      XCTAssertEqual(rendered.pixelWidth, 142)
+      XCTAssertEqual(rendered.pixelHeight, 428)
+      XCTAssertLessThanOrEqual(rendered.data.count, 512 * 1_024)
+    }
+  }
+
   func testDefaultSafeAreaLeavesRoomForFirmwareStatusBar() {
     XCTAssertEqual(UsageCardLayout.defaultSafeArea, 56)
     XCTAssertGreaterThanOrEqual(UsageCardLayout.defaultSafeArea, UsageCardLayout.minimumSafeArea)
