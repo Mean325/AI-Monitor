@@ -120,7 +120,7 @@ struct QoderCardView: View {
       )
     case .nothingMatrix:
       EmptyView()
-    case .quotaRings:
+    case .quotaRings, .neoBrutalism, .retroPixel:
       EmptyView()
     }
   }
@@ -148,6 +148,45 @@ struct QoderCardView: View {
       nothingMatrixLayout
     case .quotaRings:
       minimalColumnLayout
+    case .neoBrutalism:
+      NeoBrutalistUsageCardView(
+        service: "QODER",
+        headlineTitle: "⚡ LAST ACTIVE",
+        headlineValue: lastActiveText,
+        primaryTitle: "Credit 已用",
+        primaryValue: creditPercentageText,
+        primarySuffix: creditPercentageSuffix,
+        captionTitle: "已用 / 总计",
+        captionValue: creditSnapshot?.hasData == true
+          ? "\(Self.compactCount(creditUsed)) / \(Self.compactCount(creditTotal))" : "等待同步",
+        progress: creditPercentage,
+        progressTitle: "梯级用量条",
+        secondaryTitle: "今日对话",
+        secondarySubtitle: "PROMPTS",
+        secondaryValue: "\(todayPromptsText) 次",
+        footerTitle: "上下文",
+        footerValue: contextPercentageText,
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
+    case .retroPixel:
+      RetroPixelUsageCardView(
+        service: "QODER",
+        primaryTitle: "[ CREDIT LEFT ]",
+        primaryValue: creditSnapshot?.remainingPercent.map(String.init) ?? "--",
+        primarySuffix: "%",
+        progress: CGFloat(creditSnapshot?.remainingPercent ?? 0) / 100,
+        remainingPercent: creditSnapshot?.remainingPercent,
+        hasData: creditSnapshot?.remainingPercent != nil,
+        metricTitle: "今日对话:",
+        metricValue: "\(todayPromptsText) 次",
+        firstFooterTitle: "最近活跃",
+        firstFooterValue: lastActiveText,
+        secondFooterTitle: "上下文",
+        secondFooterValue: contextPercentageText,
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
     }
   }
 

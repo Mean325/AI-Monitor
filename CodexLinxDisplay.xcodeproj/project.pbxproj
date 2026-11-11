@@ -13,6 +13,7 @@
 		09FDC1B2E28A3FA5E6AE665B /* GrokUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C49CD533CF0F259DFF364FD /* GrokUsageClient.swift */; };
 		0A3771710F3BFC7EE54F8AB7 /* GeminiCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB10D21840CAED6F632F62C /* GeminiCardView.swift */; };
 		0BCA6DBF683A97C291E5A656 /* QoderCreditSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55F5F10B425C9524BED08F9A /* QoderCreditSnapshot.swift */; };
+		0EEB7AF10164F22340677DC7 /* DisplayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63255D57AA93243A7DC468FD /* DisplayMode.swift */; };
 		101AB246A549DE12272FDD1C /* CodexHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2772AEC9F5602218A73551 /* CodexHookInstaller.swift */; };
 		134E00F49225548A74BB9E81 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0B0F75745430B7CFD7642BB /* Assets.xcassets */; };
 		142508F9F0BAE3E84CC9215B /* GrokUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B7A2D56F1851CC71B3219B /* GrokUsageClientTests.swift */; };
@@ -29,11 +30,13 @@
 		324F77453A7F2C35AEE5D93C /* QoderUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0E161EF3D5262E90F444877 /* QoderUsageClientTests.swift */; };
 		33237C563E0CB09242C99245 /* GeminiHookInstallerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9041C85ABCF1E505621C3B /* GeminiHookInstallerTests.swift */; };
 		356F4672FB51FBCF3A66DF03 /* GeminiActivityInterpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C5E94553EEFCA946AE8501 /* GeminiActivityInterpreter.swift */; };
+		3614C56D374CBC5CE3D4C156 /* RetroPixelUsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8B115255D5CDFC7D30B01C /* RetroPixelUsageCardView.swift */; };
 		387B818678E0C40752425642 /* GrokUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16C4510077F2B31FF29056C /* GrokUsageSnapshot.swift */; };
 		394F592A017F66930EFCE1F2 /* QoderActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13AFE8C41E17BB48911D6426 /* QoderActivityMonitor.swift */; };
 		3B6F0E5105EB13FC091E3CD4 /* AppBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0F7DCF6008E7248128F9C0 /* AppBrand.swift */; };
 		3C096C6D37CC1A8A2036EC3D /* ClaudeCodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D47A330135F62E0572A526D /* ClaudeCodeCardView.swift */; };
 		3C90A308CC352D57A7EE41F1 /* UsageCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57966CEDE2F0E2EBF43CDCA1 /* UsageCardRenderer.swift */; };
+		3E1A1FA6E3523F616B79AC88 /* DisplayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63255D57AA93243A7DC468FD /* DisplayMode.swift */; };
 		3F0C2BDC9AEB52BD5B8D3174 /* CodexActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9923333557F59D96FE374FDB /* CodexActivityTests.swift */; };
 		404A65083A6EDAEDD93EAB9E /* QoderUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EFEC580A7F539192781A3E /* QoderUsageSnapshot.swift */; };
 		48CDB087825F5CF4FDEEBAE9 /* ClaudeCodeHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B9450D53C09EFBDFEDEA74 /* ClaudeCodeHookInstaller.swift */; };
@@ -65,12 +68,15 @@
 		976557E5E7BE9FCB2E0002DA /* QoderActivityInterpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8440990D4BFFC09E93EA8F /* QoderActivityInterpreter.swift */; };
 		98598D6198621D698152E7AE /* GeminiUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23064DA62CD509E207706CDD /* GeminiUsageClient.swift */; };
 		99511856D0638A92CF6FD57C /* en.lproj in Resources */ = {isa = PBXBuildFile; fileRef = A63D919C44854AAB303C5CCE /* en.lproj */; };
+		99F0B4983E37FC90F0B81636 /* RetroPixelUsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8B115255D5CDFC7D30B01C /* RetroPixelUsageCardView.swift */; };
 		9A1037BB537E9F2C1E52B579 /* GrokUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16C4510077F2B31FF29056C /* GrokUsageSnapshot.swift */; };
 		9D8B9F23FAE7BCD28E63D39B /* ClaudeCodeUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104FE28005328026A994385B /* ClaudeCodeUsageClientTests.swift */; };
 		9FC0117BB8A2EA47A9DA6C0C /* CoreBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2DB394AC9E5BDA014E0FF0A6 /* CoreBluetooth.framework */; };
 		A1B485CE41CF99FB78AD23FF /* QoderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21979514AAAC95FF50CD757 /* QoderCardView.swift */; };
 		AB93CD8DD8A2A1498391C35E /* ClaudeCodeUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281396CA264CDFF22FD413B5 /* ClaudeCodeUsageClient.swift */; };
+		AD7F370C2D1E2A8F20999E85 /* NeoBrutalistUsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7610E82F04D6A440948F827 /* NeoBrutalistUsageCardView.swift */; };
 		ADF81ABFA77D5C3F11B23C73 /* QoderUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EFEC580A7F539192781A3E /* QoderUsageSnapshot.swift */; };
+		BC90F28E9EBBF9D99A94BED0 /* NeoBrutalistUsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7610E82F04D6A440948F827 /* NeoBrutalistUsageCardView.swift */; };
 		C09979C44291296AE31B413E /* GeminiUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23064DA62CD509E207706CDD /* GeminiUsageClient.swift */; };
 		C5736989F27BAE1C1F04E72F /* ClaudeCodeUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D90BA27FA03BABD87C39173 /* ClaudeCodeUsageSnapshot.swift */; };
 		C5D8F5ECA163F53BD156662D /* GeminiUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE07BB08FE4312FD457E0AC /* GeminiUsageSnapshot.swift */; };
@@ -131,8 +137,10 @@
 		58B9450D53C09EFBDFEDEA74 /* ClaudeCodeHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeHookInstaller.swift; sourceTree = "<group>"; };
 		5BBCE500D8A1C5BC100395F4 /* CodexLinxPreview */ = {isa = PBXFileReference; includeInIndex = 0; path = CodexLinxPreview; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C4E784D5D9F2A8F6DA9F59D /* CodexLinxDisplayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLinxDisplayApp.swift; sourceTree = "<group>"; };
+		63255D57AA93243A7DC468FD /* DisplayMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayMode.swift; sourceTree = "<group>"; };
 		657309D17887B9B9B61DB9F5 /* CodexLinxDisplayTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodexLinxDisplayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		65E2BD70D2DAA1E4947F5BD9 /* GrokActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokActivityMonitor.swift; sourceTree = "<group>"; };
+		6E8B115255D5CDFC7D30B01C /* RetroPixelUsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetroPixelUsageCardView.swift; sourceTree = "<group>"; };
 		6F31BBB9EAFF18FC3E59A9A7 /* UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshot.swift; sourceTree = "<group>"; };
 		75A61C34C1209EB3E2A4222D /* CodexLinxDisplay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexLinxDisplay.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		78145063CFDF14686F4F63E6 /* GrokCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokCardView.swift; sourceTree = "<group>"; };
@@ -170,6 +178,7 @@
 		EEB10D21840CAED6F632F62C /* GeminiCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiCardView.swift; sourceTree = "<group>"; };
 		EF9041C85ABCF1E505621C3B /* GeminiHookInstallerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiHookInstallerTests.swift; sourceTree = "<group>"; };
 		F16C4510077F2B31FF29056C /* GrokUsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokUsageSnapshot.swift; sourceTree = "<group>"; };
+		F7610E82F04D6A440948F827 /* NeoBrutalistUsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeoBrutalistUsageCardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -284,6 +293,7 @@
 				3D90BA27FA03BABD87C39173 /* ClaudeCodeUsageSnapshot.swift */,
 				495CC8E469ADC7965E6BAAD1 /* CodexActivityState.swift */,
 				D201F9235BAABFD77052C6F5 /* CodexRateLimitClient.swift */,
+				63255D57AA93243A7DC468FD /* DisplayMode.swift */,
 				52C5E94553EEFCA946AE8501 /* GeminiActivityInterpreter.swift */,
 				EEB10D21840CAED6F632F62C /* GeminiCardView.swift */,
 				23064DA62CD509E207706CDD /* GeminiUsageClient.swift */,
@@ -293,12 +303,14 @@
 				1C49CD533CF0F259DFF364FD /* GrokUsageClient.swift */,
 				F16C4510077F2B31FF29056C /* GrokUsageSnapshot.swift */,
 				B8F06F104E1BF95F00951024 /* ImageAPIClient.swift */,
+				F7610E82F04D6A440948F827 /* NeoBrutalistUsageCardView.swift */,
 				4C8440990D4BFFC09E93EA8F /* QoderActivityInterpreter.swift */,
 				A21979514AAAC95FF50CD757 /* QoderCardView.swift */,
 				55F5F10B425C9524BED08F9A /* QoderCreditSnapshot.swift */,
 				2C0841751F3ED1CE4165FFF7 /* QoderLogClient.swift */,
 				1663C40DF04E6D366ACB6554 /* QoderUsageClient.swift */,
 				34EFEC580A7F539192781A3E /* QoderUsageSnapshot.swift */,
+				6E8B115255D5CDFC7D30B01C /* RetroPixelUsageCardView.swift */,
 				57966CEDE2F0E2EBF43CDCA1 /* UsageCardRenderer.swift */,
 				D12DA604FF758ADCB6E850BC /* UsageCardView.swift */,
 				6F31BBB9EAFF18FC3E59A9A7 /* UsageSnapshot.swift */,
@@ -448,6 +460,7 @@
 				101AB246A549DE12272FDD1C /* CodexHookInstaller.swift in Sources */,
 				21F7C9D1552F47EF26F43C7F /* CodexLinxDisplayApp.swift in Sources */,
 				577A03D9D0CF0345D7AF0938 /* CodexRateLimitClient.swift in Sources */,
+				3E1A1FA6E3523F616B79AC88 /* DisplayMode.swift in Sources */,
 				7169CCE88059D1607D847860 /* DockTaskStatus.swift in Sources */,
 				356F4672FB51FBCF3A66DF03 /* GeminiActivityInterpreter.swift in Sources */,
 				9575B179E8B1CD2012672B41 /* GeminiActivityMonitor.swift in Sources */,
@@ -463,6 +476,7 @@
 				646B6A023008E112349EC240 /* ImageAPIClient.swift in Sources */,
 				71E6AE685A47BDDA3B9EB3FC /* LocalNetworkAccess.swift in Sources */,
 				FC98DB62A09F1CD67AB83E37 /* MenuBarContentView.swift in Sources */,
+				AD7F370C2D1E2A8F20999E85 /* NeoBrutalistUsageCardView.swift in Sources */,
 				976557E5E7BE9FCB2E0002DA /* QoderActivityInterpreter.swift in Sources */,
 				394F592A017F66930EFCE1F2 /* QoderActivityMonitor.swift in Sources */,
 				A1B485CE41CF99FB78AD23FF /* QoderCardView.swift in Sources */,
@@ -470,6 +484,7 @@
 				66A98212D46F0D9D637CDF08 /* QoderLogClient.swift in Sources */,
 				62514DF5B64FE36464808FA6 /* QoderUsageClient.swift in Sources */,
 				ADF81ABFA77D5C3F11B23C73 /* QoderUsageSnapshot.swift in Sources */,
+				99F0B4983E37FC90F0B81636 /* RetroPixelUsageCardView.swift in Sources */,
 				2B34FDD52F051E7541B340C7 /* SettingsView.swift in Sources */,
 				8382F6EBABBE1C99401478D7 /* TaskTrafficLight.swift in Sources */,
 				5A099E00672BFD0071B1A78C /* UpdaterController.swift in Sources */,
@@ -509,6 +524,7 @@
 				C5736989F27BAE1C1F04E72F /* ClaudeCodeUsageSnapshot.swift in Sources */,
 				7A8BD54862A6DAC76CC2F423 /* CodexActivityState.swift in Sources */,
 				9271A678BC0C5AE5DF840516 /* CodexRateLimitClient.swift in Sources */,
+				0EEB7AF10164F22340677DC7 /* DisplayMode.swift in Sources */,
 				EF68AE04307F292BD9FF4234 /* GeminiActivityInterpreter.swift in Sources */,
 				0A3771710F3BFC7EE54F8AB7 /* GeminiCardView.swift in Sources */,
 				C09979C44291296AE31B413E /* GeminiUsageClient.swift in Sources */,
@@ -518,12 +534,14 @@
 				09FDC1B2E28A3FA5E6AE665B /* GrokUsageClient.swift in Sources */,
 				9A1037BB537E9F2C1E52B579 /* GrokUsageSnapshot.swift in Sources */,
 				20785F3A780E830C7CB33CCB /* ImageAPIClient.swift in Sources */,
+				BC90F28E9EBBF9D99A94BED0 /* NeoBrutalistUsageCardView.swift in Sources */,
 				826E851D437433E93F14B1E6 /* QoderActivityInterpreter.swift in Sources */,
 				7393B2E71423C7474703B39B /* QoderCardView.swift in Sources */,
 				4CE7C7F6C400A79069017B5F /* QoderCreditSnapshot.swift in Sources */,
 				1610408A1C62B041D51A0484 /* QoderLogClient.swift in Sources */,
 				DBEF4EB3B73861C2F2816D77 /* QoderUsageClient.swift in Sources */,
 				404A65083A6EDAEDD93EAB9E /* QoderUsageSnapshot.swift in Sources */,
+				3614C56D374CBC5CE3D4C156 /* RetroPixelUsageCardView.swift in Sources */,
 				3C90A308CC352D57A7EE41F1 /* UsageCardRenderer.swift in Sources */,
 				7D4754075467F197D99291CD /* UsageCardView.swift in Sources */,
 				D459B50E202C0C1B62D74956 /* UsageSnapshot.swift in Sources */,

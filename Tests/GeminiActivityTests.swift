@@ -80,7 +80,8 @@ final class GeminiActivityTests: XCTestCase {
 
     // Write transcript entry (running with tool)
     let transcriptFile = convDir.appendingPathComponent("transcript.jsonl")
-    let transcriptLine = #"{"type":"USER_INPUT","created_at":"2026-10-19T10:00:00Z","content":"Do something"}"# + "\n"
+    let timestamp = ISO8601DateFormatter().string(from: Date())
+    let transcriptLine = #"{"type":"USER_INPUT","created_at":"\#(timestamp)","content":"Do something"}"# + "\n"
     try transcriptLine.write(to: transcriptFile, atomically: true, encoding: .utf8)
 
     monitor.refresh()

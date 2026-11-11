@@ -82,7 +82,7 @@ struct ClaudeCodeCardView: View {
         colors: [chronosPrimary.opacity(0.05), .clear], startPoint: .top, endPoint: .bottom)
     case .nothingMatrix:
       EmptyView()
-    case .quotaRings:
+    case .quotaRings, .neoBrutalism, .retroPixel:
       EmptyView()
     }
   }
@@ -104,6 +104,44 @@ struct ClaudeCodeCardView: View {
     case .minimalColumn: minimalColumnLayout
     case .nothingMatrix: nothingMatrixLayout
     case .quotaRings: minimalColumnLayout
+    case .neoBrutalism:
+      NeoBrutalistUsageCardView(
+        service: "CLAUDE",
+        headlineTitle: "⚡ LAST ACTIVE",
+        headlineValue: lastActiveText,
+        primaryTitle: "今日 Token",
+        primaryValue: todayText,
+        primarySuffix: "tok",
+        captionTitle: "近 7 天",
+        captionValue: weekText,
+        progress: todayRatio,
+        progressTitle: "今日 / 近 7 天",
+        secondaryTitle: "今日会话",
+        secondarySubtitle: nothingModelText,
+        secondaryValue: snapshot.map { "\($0.todaySessions) 个" } ?? "--",
+        footerTitle: "数据来源",
+        footerValue: "CLAUDE CODE",
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
+    case .retroPixel:
+      RetroPixelUsageCardView(
+        service: "CLAUDE",
+        primaryTitle: "[ TODAY TOKEN ]",
+        primaryValue: todayText,
+        primarySuffix: "tok",
+        progress: todayRatio,
+        remainingPercent: nil,
+        hasData: snapshot != nil,
+        metricTitle: "今日会话:",
+        metricValue: snapshot.map { "\($0.todaySessions) 个" } ?? "--",
+        firstFooterTitle: "近 7 天",
+        firstFooterValue: weekText,
+        secondFooterTitle: "最近活跃",
+        secondFooterValue: lastActiveText,
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
     }
   }
 

@@ -472,7 +472,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text("Linx68 推送")
             .font(.system(size: 14, weight: .medium))
-          Text(model.isLinxEnabled ? "已开启自动同步与键盘推送" : "已暂停所有同步与推送")
+          Text(model.isLinxEnabled ? "已开启键盘推送" : "已暂停键盘推送，AI 监控与用量刷新继续运行")
             .font(.caption)
             .foregroundStyle(.secondary)
         }
@@ -603,6 +603,8 @@ struct SettingsView: View {
               }
             }
           }
+          .disabled(!model.canEditUsageCardColorScheme)
+          .opacity(model.canEditUsageCardColorScheme ? 1 : 0.45)
 
           if model.displayMode.isUsageMode {
             settingsCard(
@@ -787,31 +789,6 @@ struct SettingsView: View {
           .labelsHidden()
           .frame(width: 120)
           .disabled(model.displayMode == .customImage)
-        }
-      }
-
-      settingsCard(
-        title: "运行状态",
-        subtitle: "最近一次查询与推送结果",
-        symbol: connectionSymbol,
-        tint: connectionColor,
-        showPushAction: true
-      ) {
-        statusRow(title: "当前状态", value: model.statusText, valueColor: connectionColor)
-        Divider().opacity(0.5)
-        statusRow(title: "用量刷新", value: model.lastRefreshText)
-        Divider().opacity(0.5)
-        statusRow(title: "键盘推送", value: model.lastUploadText)
-        Divider().opacity(0.5)
-        pushRequestDetailsButton
-
-        if let error = model.lastError {
-          Label(error, systemImage: "exclamationmark.triangle.fill")
-            .font(.caption)
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
         }
       }
     }
@@ -1238,6 +1215,31 @@ struct SettingsView: View {
         }
       }
 
+      }
+
+      settingsCard(
+        title: "运行状态",
+        subtitle: "最近一次查询与推送结果",
+        symbol: connectionSymbol,
+        tint: connectionColor,
+        showPushAction: model.isLinxEnabled
+      ) {
+        statusRow(title: "当前状态", value: model.statusText, valueColor: connectionColor)
+        Divider().opacity(0.5)
+        statusRow(title: "用量刷新", value: model.lastRefreshText)
+        Divider().opacity(0.5)
+        statusRow(title: "键盘推送", value: model.lastUploadText)
+        Divider().opacity(0.5)
+        pushRequestDetailsButton
+
+        if let error = model.lastError {
+          Label(error, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        }
       }
     }
     .frame(maxWidth: .infinity)
@@ -1756,6 +1758,9 @@ struct SettingsView: View {
   }
 
   private var colorSchemeSubtitle: String {
+    if !model.canEditUsageCardColorScheme {
+      return "当前风格使用固定配色，切换其他风格后可编辑"
+    }
     switch model.displayMode {
     case .codex: return "选择 Codex 用量卡片的色彩方案"
     case .claudeCode: return "选择 Claude Code 卡片的色彩方案"

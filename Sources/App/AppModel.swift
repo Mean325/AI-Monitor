@@ -3,57 +3,6 @@ import Combine
 import CryptoKit
 import ServiceManagement
 
-enum DisplayMode: String, CaseIterable, Identifiable {
-  case codex
-  case claudeCode
-  case qoder
-  case grok
-  case gemini
-  case customImage
-
-  var id: String { rawValue }
-
-  var title: String {
-    switch self {
-    case .codex: return "Codex 用量"
-    case .claudeCode: return "Claude Code"
-    case .qoder: return "Qoder"
-    case .grok: return "Grok"
-    case .gemini: return "Gemini"
-    case .customImage: return "自定义图片"
-    }
-  }
-
-  var symbol: String {
-    switch self {
-    case .codex: return "terminal.fill"
-    case .claudeCode: return "sun.max.fill"
-    case .qoder: return "wand.and.stars"
-    case .grok: return "sparkles"
-    case .gemini: return "sparkle"
-    case .customImage: return "photo"
-    }
-  }
-
-  var logoAssetName: String? {
-    switch self {
-    case .codex: return "LogoCodex"
-    case .claudeCode: return "LogoClaude"
-    case .qoder: return "LogoQoder"
-    case .grok: return "LogoGrok"
-    case .gemini: return "LogoGemini"
-    case .customImage: return nil
-    }
-  }
-
-  var isUsageMode: Bool {
-    switch self {
-    case .customImage: return false
-    case .codex, .claudeCode, .qoder, .grok, .gemini: return true
-    }
-  }
-}
-
 enum KeyboardConnectionState: Equatable {
   case disconnected
   case connected
@@ -530,10 +479,9 @@ final class AppModel: ObservableObject {
     ) { [weak self] _ in
       Task { @MainActor in
         guard let self else { return }
-        guard self.isLinxEnabled else { return }
         if self.isUsageMode {
-          await self.synchronize(upload: true, forceUpload: true)
-        } else {
+          await self.synchronize(upload: self.isLinxEnabled, forceUpload: true)
+        } else if self.isLinxEnabled {
           await self.uploadCustomImage(forceUpload: true)
         }
       }
@@ -545,12 +493,11 @@ final class AppModel: ObservableObject {
   private func beginSyncAfterLaunchIfNeeded() {
     let begin = { [weak self] in
       guard let self else { return }
-      guard self.isLinxEnabled else { return }
       if self.isUsageMode {
         self.usageQueryState = .querying
-        self.statusText = "正在同步并推送…"
+        self.statusText = self.isLinxEnabled ? "正在同步并推送…" : "正在读取用量…"
         self.restartScheduler(uploadImmediately: true)
-      } else if self.customSourceImage != nil {
+      } else if self.isLinxEnabled, self.customSourceImage != nil {
         self.scheduleCurrentModeAction()
       }
     }
@@ -582,7 +529,7 @@ final class AppModel: ObservableObject {
     guard refreshIntervalSeconds != seconds else { return }
     refreshIntervalSeconds = seconds
     defaults.set(seconds, forKey: Keys.refreshInterval)
-    if isLinxEnabled, isUsageMode {
+    if isUsageMode {
       restartScheduler(uploadImmediately: false)
     }
   }
@@ -601,18 +548,13 @@ final class AppModel: ObservableObject {
       return
     }
 
-    schedulerTask?.cancel()
-    schedulerTask = nil
-    pendingModeActionTask?.cancel()
     pendingActivityUploadTask?.cancel()
     claudePendingActivityUploadTask?.cancel()
     qoderPendingActivityUploadTask?.cancel()
     grokPendingActivityUploadTask?.cancel()
+    geminiPendingActivityUploadTask?.cancel()
     localNetworkRecoveryTask?.cancel()
     keyboardConnectionState = .disconnected
-    usageQueryState = .idle
-    statusText = "Linx68 已关闭"
-    lastError = nil
   }
 
   func refreshBluetoothKeyboardInfo() {
@@ -694,7 +636,7 @@ final class AppModel: ObservableObject {
       statusText = "准备读取 Grok 余量"
     }
 
-    if hasStarted, isLinxEnabled {
+    if hasStarted {
       scheduleCurrentModeAction()
     }
   }
@@ -801,7 +743,12 @@ final class AppModel: ObservableObject {
     }
   }
 
+  var canEditUsageCardColorScheme: Bool {
+    usageCardDesign.resolved(for: displayMode).supportsColorScheme
+  }
+
   func setUsageCardColorScheme(_ colorScheme: UsageCardColorScheme) {
+    guard canEditUsageCardColorScheme else { return }
     guard usageCardColorScheme != colorScheme else { return }
 
     usageCardColorScheme = colorScheme
@@ -861,7 +808,6 @@ final class AppModel: ObservableObject {
   }
 
   func refreshOnly() {
-    guard isLinxEnabled else { return }
     guard isUsageMode else {
       statusText = "图片模式下用量刷新已暂停"
       return
@@ -1010,14 +956,14 @@ final class AppModel: ObservableObject {
   }
 
   func synchronize(upload: Bool, forceUpload: Bool) async {
-    guard isLinxEnabled, isUsageMode, !isSyncing else { return }
+    guard isUsageMode, !isSyncing else { return }
     isSyncing = true
     var didStartUpload = false
     var connectionStateBeforeUpload: KeyboardConnectionState?
     var didCompleteQuery = false
     usageQueryState = .querying
     lastError = nil
-    statusText = upload ? "正在同步并推送…" : "正在读取用量…"
+    statusText = upload && isLinxEnabled ? "正在同步并推送…" : "正在读取用量…"
 
     defer { isSyncing = false }
 
@@ -1130,12 +1076,10 @@ final class AppModel: ObservableObject {
       }
       previewImage = rendered.image
 
-      guard upload else {
+      guard upload, isLinxEnabled else {
         statusText = "用量已刷新"
         return
       }
-
-      guard isLinxEnabled else { return }
 
       let hash = SHA256.hash(data: rendered.data).map { String(format: "%02x", $0) }.joined()
       if !forceUpload, hash == lastUploadedHash {
@@ -1153,7 +1097,7 @@ final class AppModel: ObservableObject {
       lastError = nil
       statusText = "推送成功 · HTTP \(result.statusCode)"
     } catch {
-      guard isLinxEnabled else { return }
+      guard !didStartUpload || isLinxEnabled else { return }
       if didStartUpload {
         keyboardConnectionState = connectionStateAfterUploadFailure(
           error,
@@ -1749,6 +1693,7 @@ final class AppModel: ObservableObject {
         try await Task.sleep(nanoseconds: localNetworkRetryDelayNanoseconds)
       }
 
+      guard isLinxEnabled else { throw CancellationError() }
       do {
         let result = try await imageAPIClient.upload(data, endpoint: uploadEndpoint)
         guard isLinxEnabled else { throw CancellationError() }
@@ -1789,7 +1734,7 @@ final class AppModel: ObservableObject {
 
   private func restartScheduler(uploadImmediately: Bool) {
     schedulerTask?.cancel()
-    guard isLinxEnabled, isUsageMode else {
+    guard isUsageMode else {
       schedulerTask = nil
       return
     }
@@ -1797,14 +1742,14 @@ final class AppModel: ObservableObject {
     schedulerTask = Task { [weak self] in
       guard let self else { return }
       if uploadImmediately {
-        await self.synchronize(upload: true, forceUpload: true)
+        await self.synchronize(upload: self.isLinxEnabled, forceUpload: true)
       }
 
       while !Task.isCancelled {
         let interval = self.refreshIntervalSeconds
         try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
-        guard !Task.isCancelled, self.isLinxEnabled, self.isUsageMode else { return }
-        await self.synchronize(upload: true, forceUpload: false)
+        guard !Task.isCancelled, self.isUsageMode else { return }
+        await self.synchronize(upload: self.isLinxEnabled, forceUpload: false)
       }
     }
   }
@@ -1875,7 +1820,6 @@ final class AppModel: ObservableObject {
   }
 
   private func scheduleCurrentModeAction() {
-    guard isLinxEnabled else { return }
     pendingModeActionTask?.cancel()
     let expectedMode = displayMode
 
@@ -1888,7 +1832,7 @@ final class AppModel: ObservableObject {
           return
         }
       }
-      guard !Task.isCancelled, self.isLinxEnabled, self.displayMode == expectedMode else { return }
+      guard !Task.isCancelled, self.displayMode == expectedMode else { return }
 
       if expectedMode == .customImage {
         await self.uploadCustomImage(forceUpload: true)

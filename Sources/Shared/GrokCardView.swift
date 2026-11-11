@@ -95,7 +95,7 @@ struct GrokCardView: View {
       )
     case .nothingMatrix:
       EmptyView()
-    case .quotaRings:
+    case .quotaRings, .neoBrutalism, .retroPixel:
       EmptyView()
     }
   }
@@ -123,6 +123,44 @@ struct GrokCardView: View {
       nothingMatrixLayout
     case .quotaRings:
       minimalColumnLayout
+    case .neoBrutalism:
+      NeoBrutalistUsageCardView(
+        service: "GROK",
+        headlineTitle: "⚡ AUTO RESET",
+        headlineValue: "\(resetDateText)  \(resetTimeText)",
+        primaryTitle: snapshot?.windowTitle ?? "周期剩余",
+        primaryValue: remainingText,
+        primarySuffix: "%",
+        captionTitle: "用量周期",
+        captionValue: snapshot?.windowDescription ?? "等待同步",
+        progress: remainingProgress,
+        progressTitle: "梯级余量条",
+        secondaryTitle: "当前套餐",
+        secondarySubtitle: "SUBSCRIPTION",
+        secondaryValue: snapshot?.compactPlanName ?? "--",
+        footerTitle: "重置日期",
+        footerValue: resetISODateText,
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
+    case .retroPixel:
+      RetroPixelUsageCardView(
+        service: "GROK",
+        primaryTitle: "[ REMAINING ]",
+        primaryValue: remainingText,
+        primarySuffix: "%",
+        progress: remainingProgress,
+        remainingPercent: snapshot?.remainingPercent,
+        hasData: snapshot != nil,
+        metricTitle: "当前套餐:",
+        metricValue: snapshot?.compactPlanName ?? "--",
+        firstFooterTitle: "自动重置",
+        firstFooterValue: "\(resetDateText) \(resetTimeText)",
+        secondFooterTitle: "用量周期",
+        secondFooterValue: snapshot?.windowDescription ?? "等待同步",
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
     }
   }
 

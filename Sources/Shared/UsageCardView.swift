@@ -572,6 +572,8 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
   case minimalColumn
   case nothingMatrix
   case quotaRings
+  case neoBrutalism
+  case retroPixel
 
   var id: String { rawValue }
 
@@ -600,6 +602,8 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
     case .minimalColumn: return "简约立柱"
     case .nothingMatrix: return "Nothing 矩阵"
     case .quotaRings: return "双环余量"
+    case .neoBrutalism: return "新野兽派潮酷"
+    case .retroPixel: return "点阵复古像素"
     }
   }
 
@@ -612,6 +616,8 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
     case .minimalColumn: return "纵向进度"
     case .nothingMatrix: return "黑白点阵"
     case .quotaRings: return "5h 与周余量"
+    case .neoBrutalism: return "明黄撞色 / 固定配色"
+    case .retroPixel: return "荧光阶梯 / 余量变色"
     }
   }
 
@@ -624,12 +630,17 @@ enum UsageCardDesign: String, CaseIterable, Identifiable {
     case .minimalColumn: return "rectangle.split.1x2.fill"
     case .nothingMatrix: return "circle.grid.3x3.fill"
     case .quotaRings: return "circle.circle.fill"
+    case .neoBrutalism: return "bolt.square.fill"
+    case .retroPixel: return "square.grid.3x3.fill"
     }
   }
 
   var usesFullCanvas: Bool {
     self == .minimalColumn || self == .nothingMatrix || self == .quotaRings
+      || self == .neoBrutalism || self == .retroPixel
   }
+
+  var supportsColorScheme: Bool { self != .neoBrutalism && self != .retroPixel }
 }
 
 struct UsageCardPalette {
@@ -756,6 +767,8 @@ struct UsageCardView: View {
       EmptyView()
     case .quotaRings:
       EmptyView()
+    case .neoBrutalism, .retroPixel:
+      EmptyView()
     }
   }
 
@@ -782,6 +795,44 @@ struct UsageCardView: View {
       nothingMatrixLayout
     case .quotaRings:
       quotaRingsLayout
+    case .neoBrutalism:
+      NeoBrutalistUsageCardView(
+        service: "CODEX",
+        headlineTitle: "⚡ AUTO RESET",
+        headlineValue: "\(resetDateText)  \(resetTimeText)",
+        primaryTitle: snapshot?.windowTitle ?? "周期剩余",
+        primaryValue: snapshot.map { "\($0.remainingPercent)" } ?? "--",
+        primarySuffix: "%",
+        captionTitle: "用量周期",
+        captionValue: snapshot?.windowDescription ?? "等待同步",
+        progress: remainingProgress,
+        progressTitle: "梯级余量条",
+        secondaryTitle: "可用重置额度",
+        secondarySubtitle: "MANUAL RESET",
+        secondaryValue: snapshot.map { "× \($0.availableResetCount)" } ?? "--",
+        footerTitle: "重置日期",
+        footerValue: resetISODateText,
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
+    case .retroPixel:
+      RetroPixelUsageCardView(
+        service: "CODEX",
+        primaryTitle: "[ REMAINING ]",
+        primaryValue: snapshot.map { "\($0.remainingPercent)" } ?? "--",
+        primarySuffix: "%",
+        progress: remainingProgress,
+        remainingPercent: snapshot?.remainingPercent,
+        hasData: snapshot != nil,
+        metricTitle: "可用重置:",
+        metricValue: snapshot.map { "\($0.availableResetCount) 次" } ?? "--",
+        firstFooterTitle: "自动重置",
+        firstFooterValue: "\(resetDateText) \(resetTimeText)",
+        secondFooterTitle: "用量周期",
+        secondFooterValue: snapshot?.windowDescription ?? "等待同步",
+        activityState: activityState,
+        safeAreaHeight: safeAreaHeight
+      )
     }
   }
 

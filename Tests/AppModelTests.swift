@@ -27,37 +27,131 @@ final class AppModelTests: XCTestCase {
   }
 
   @MainActor
-  func testLinxMasterSwitchPersistsAndControlsStartupSync() async throws {
+  func testLinxSwitchOnlyControlsPushWhileUsageAndActivityKeepUpdating() async throws {
     let suite = "LinxMasterSwitchTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let codexClient = FakeCodexClient()
     let imageClient = FakeImageClient()
+    let monitor = FakeCodexActivityMonitor()
     let model = AppModel(
       defaults: defaults,
       codexClient: codexClient,
-      imageAPIClient: imageClient
+      imageAPIClient: imageClient,
+      activityMonitor: monitor
     )
 
     XCTAssertTrue(model.isLinxEnabled)
     model.setLinxEnabled(false)
     XCTAssertFalse(AppModel(defaults: defaults).isLinxEnabled)
 
+    model.setRefreshInterval(1)
     model.start()
-    try await Task.sleep(nanoseconds: 100_000_000)
+    let startupRefreshed = await waitUntil { model.snapshot != nil && !model.isSyncing }
+    XCTAssertTrue(startupRefreshed)
+    XCTAssertEqual(model.usageQueryState, .succeeded)
+    XCTAssertNotNil(model.lastRefreshDate)
+    XCTAssertEqual(model.statusText, "用量已刷新")
+    let automaticRefreshCompleted = await waitUntil { await codexClient.fetchCount >= 2 }
+    XCTAssertTrue(automaticRefreshCompleted)
     let disabledFetchCount = await codexClient.fetchCount
     let disabledUploadCount = await imageClient.uploadCount
-    XCTAssertEqual(disabledFetchCount, 0)
+    XCTAssertGreaterThanOrEqual(disabledFetchCount, 2)
     XCTAssertEqual(disabledUploadCount, 0)
+    XCTAssertNil(model.lastPushRequest)
+
+    monitor.send(.running)
+    XCTAssertEqual(model.selectedActivityState, .running)
+    model.refreshOnly()
+    let manualRefreshCompleted = await waitUntil {
+      await codexClient.fetchCount > disabledFetchCount && !model.isSyncing
+    }
+    XCTAssertTrue(manualRefreshCompleted)
 
     model.setLinxEnabled(true)
     let syncCompleted = await waitUntil {
       let fetchCount = await codexClient.fetchCount
       let uploadCount = await imageClient.uploadCount
-      return fetchCount == 1 && uploadCount == 1
+      return fetchCount > disabledFetchCount && uploadCount == 1
     }
     XCTAssertTrue(syncCompleted)
     XCTAssertTrue(AppModel(defaults: defaults).isLinxEnabled)
+
+    model.setLinxEnabled(false)
+    let fetchCountBeforeNextRefresh = await codexClient.fetchCount
+    let refreshAfterDisablingCompleted = await waitUntil {
+      await codexClient.fetchCount > fetchCountBeforeNextRefresh && !model.isSyncing
+    }
+    XCTAssertTrue(refreshAfterDisablingCompleted)
+    let finalUploadCount = await imageClient.uploadCount
+    XCTAssertEqual(finalUploadCount, 1)
+  }
+
+  @MainActor
+  func testChangingAIRefreshesPopupUsageWhenPushStartsDisabled() async throws {
+    let suite = "LinxDisabledAISelectionTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(false, forKey: "linxEnabled")
+    let imageClient = FakeImageClient()
+    let gemini = FakeCodexActivityMonitor()
+    let model = AppModel(defaults: defaults, codexClient: FakeCodexClient(),
+      imageAPIClient: imageClient, activityMonitor: FakeCodexActivityMonitor(),
+      geminiUsageClient: FakeGeminiClient(), geminiActivityMonitor: gemini)
+
+    model.start()
+    let initialRefreshed = await waitUntil { model.snapshot != nil && !model.isSyncing }
+    XCTAssertTrue(initialRefreshed)
+    model.setSelectedAI(.gemini)
+    let geminiRefreshed = await waitUntil { model.geminiSnapshot != nil && !model.isSyncing }
+    XCTAssertTrue(geminiRefreshed)
+    gemini.send(.awaitingUserInput)
+    XCTAssertEqual(model.presentedAIMode, .gemini)
+    XCTAssertEqual(model.selectedActivityState, .awaitingUserInput)
+    XCTAssertEqual(model.usageQueryState, .succeeded)
+    let uploadCount = await imageClient.uploadCount
+    XCTAssertEqual(uploadCount, 0)
+    XCTAssertNil(model.lastPushRequest)
+  }
+
+  @MainActor
+  func testFailedUsageQueryReportsErrorWhenPushIsDisabled() async throws {
+    let suite = "LinxDisabledQueryFailureTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(false, forKey: "linxEnabled")
+    let imageClient = FakeImageClient()
+    let model = AppModel(defaults: defaults, codexClient: FailingCodexClient(),
+      imageAPIClient: imageClient)
+
+    await model.synchronize(upload: true, forceUpload: true)
+
+    XCTAssertEqual(model.usageQueryState, .failed)
+    XCTAssertEqual(model.lastError, "测试查询失败")
+    XCTAssertEqual(model.statusText, "同步失败")
+    let uploadCount = await imageClient.uploadCount
+    XCTAssertEqual(uploadCount, 0)
+  }
+
+  @MainActor
+  func testDisablingPushStopsPendingNetworkRetry() async throws {
+    let suite = "LinxDisabledRetryTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let imageClient = FlakyLocalNetworkImageClient(failuresBeforeSuccess: 1)
+    let model = AppModel(defaults: defaults, codexClient: FakeCodexClient(),
+      imageAPIClient: imageClient, localNetworkRetryDelayNanoseconds: 300_000_000)
+
+    let sync = Task { await model.synchronize(upload: true, forceUpload: true) }
+    let firstUploadAttempted = await waitUntil { await imageClient.uploadCount == 1 }
+    XCTAssertTrue(firstUploadAttempted)
+    model.setLinxEnabled(false)
+    await sync.value
+
+    let uploadCount = await imageClient.uploadCount
+    XCTAssertEqual(uploadCount, 1)
+    XCTAssertEqual(model.usageQueryState, .succeeded)
+    XCTAssertEqual(model.keyboardConnectionState, .disconnected)
   }
 
   @MainActor
@@ -547,6 +641,35 @@ final class AppModelTests: XCTestCase {
     let restoredModel = AppModel(defaults: defaults)
     XCTAssertEqual(restoredModel.usageCardColorScheme, .cloudDancer)
     XCTAssertEqual(restoredModel.usageCardDesign, .orbitalRings)
+  }
+
+  @MainActor
+  func testFixedColorDesignsLockPaletteAndRestoreEditing() throws {
+    for design in UsageCardDesign.allCases where !design.supportsColorScheme {
+      let suiteName = "AppModelTests.\(UUID().uuidString)"
+      let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+      defer { defaults.removePersistentDomain(forName: suiteName) }
+      let model = AppModel(defaults: defaults)
+      model.setUsageCardColorScheme(.cloudDancer)
+      model.setUsageCardDesign(design)
+
+      XCTAssertFalse(model.canEditUsageCardColorScheme)
+      let fixedPreview = try XCTUnwrap(model.previewImage?.tiffRepresentation)
+      model.setUsageCardColorScheme(.signalYellow)
+      XCTAssertEqual(model.usageCardColorScheme, .cloudDancer)
+      XCTAssertEqual(defaults.string(forKey: "usageCardColorScheme"), "cloudDancer")
+      XCTAssertEqual(model.previewImage?.tiffRepresentation, fixedPreview)
+
+      let restoredModel = AppModel(defaults: defaults)
+      XCTAssertEqual(restoredModel.usageCardDesign, design)
+      XCTAssertFalse(restoredModel.canEditUsageCardColorScheme)
+
+      model.setUsageCardDesign(.minimalColumn)
+      XCTAssertTrue(model.canEditUsageCardColorScheme)
+      XCTAssertEqual(model.usageCardColorScheme, .cloudDancer)
+      model.setUsageCardColorScheme(.signalYellow)
+      XCTAssertEqual(model.usageCardColorScheme, .signalYellow)
+    }
   }
 
   @MainActor
@@ -1129,6 +1252,10 @@ private actor FakeCodexClient: CodexRateLimitFetching {
     fetchCount += 1
     return .sample
   }
+}
+
+private actor FakeGeminiClient: GeminiUsageFetching {
+  func fetch() async throws -> GeminiUsageSnapshot { .sample }
 }
 
 private actor ExhaustedCodexClient: CodexRateLimitFetching {

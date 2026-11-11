@@ -10,6 +10,112 @@ final class UsageCardRendererTests: XCTestCase {
   }
 
   @MainActor
+  func testFixedColorDesignsIgnorePaletteForEverySource() throws {
+    for design in UsageCardDesign.allCases where !design.supportsColorScheme {
+      for mode in [DisplayMode.codex, .claudeCode, .gemini, .qoder, .grok] {
+        XCTAssertTrue(UsageCardDesign.selectableCases(for: mode).contains(design))
+        let outputs = try UsageCardColorScheme.allCases.map { scheme -> Data in
+          switch mode {
+          case .codex:
+            return try UsageCardRenderer.render(snapshot: .sample,
+              safeAreaHeight: 56, jpegQuality: 0.9, colorScheme: scheme, design: design).data
+          case .claudeCode:
+            return try UsageCardRenderer.render(claudeSnapshot: .sample,
+              safeAreaHeight: 56, jpegQuality: 0.9, colorScheme: scheme, design: design).data
+          case .gemini:
+            return try UsageCardRenderer.render(geminiSnapshot: .sample,
+              safeAreaHeight: 56, jpegQuality: 0.9, colorScheme: scheme, design: design).data
+          case .qoder:
+            return try UsageCardRenderer.render(qoderSnapshot: .sample, creditSnapshot: .sample,
+              safeAreaHeight: 56, jpegQuality: 0.9, colorScheme: scheme, design: design).data
+          case .grok:
+            return try UsageCardRenderer.render(grokSnapshot: .sample,
+              safeAreaHeight: 56, jpegQuality: 0.9, colorScheme: scheme, design: design).data
+          case .customImage:
+            XCTFail("Unexpected custom image mode")
+            return Data()
+          }
+        }
+        XCTAssertEqual(Set(outputs).count, 1, mode.rawValue)
+      }
+    }
+  }
+
+  @MainActor
+  func testRetroPixelQuotaTonesAndSafeArea() throws {
+    for (percent, expectedRGB) in [
+      (100, [6, 16, 9]), (78, [6, 16, 9]), (40, [6, 16, 9]),
+      (39, [17, 14, 6]), (35, [17, 14, 6]), (15, [17, 14, 6]),
+      (14, [19, 7, 9]), (12, [19, 7, 9]), (0, [19, 7, 9]),
+    ] {
+      let snapshot = UsageSnapshot(remainingPercent: percent,
+        resetDate: UsageSnapshot.sample.resetDate, windowMinutes: 10_080,
+        availableResetCount: 2, planType: "plus")
+      let rendered = try UsageCardRenderer.render(snapshot: snapshot,
+        safeAreaHeight: UsageCardLayout.maximumSafeArea, jpegQuality: 0.95, design: .retroPixel)
+      let bitmap = try XCTUnwrap(NSBitmapImageRep(data: rendered.data))
+      for y in 8..<Int(UsageCardLayout.maximumSafeArea - 8) {
+        var pixel = [Int](repeating: 0, count: bitmap.samplesPerPixel)
+        bitmap.getPixel(&pixel, atX: 72, y: y)
+        for channel in 0..<3 {
+          XCTAssertEqual(Double(pixel[channel]), Double(expectedRGB[channel]), accuracy: 6)
+        }
+      }
+      var dot = [Int](repeating: 0, count: bitmap.samplesPerPixel)
+      bitmap.getPixel(&dot, atX: 69, y: 21)
+      XCTAssertGreaterThan(zip(dot.prefix(3), expectedRGB).map { $0 - $1 }.max() ?? 0, 8,
+        "The dot grid should extend into the top safe area")
+      let attachment = XCTAttachment(data: rendered.data, uniformTypeIdentifier: "public.jpeg")
+      attachment.name = "Retro-pixel-\(percent)-percent"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
+  }
+
+  @MainActor
+  func testRetroPixelMissingQuotaAndTaskStates() throws {
+    let waiting = try UsageCardRenderer.render(snapshot: nil,
+      safeAreaHeight: 44, jpegQuality: 0.9, design: .retroPixel)
+    let states = try [CodexActivityState.idle, .running, .awaitingAuthorization].map { state in
+      try UsageCardRenderer.render(snapshot: .sample, activityState: state,
+        safeAreaHeight: 44, jpegQuality: 0.9, design: .retroPixel).data
+    }
+    XCTAssertEqual(Set(states + [waiting.data]).count, 4)
+    let unknownQuota = try UsageCardRenderer.render(qoderSnapshot: .sample, creditSnapshot: nil,
+      safeAreaHeight: 44, jpegQuality: 0.9, design: .retroPixel)
+    let knownQuota = try UsageCardRenderer.render(qoderSnapshot: .sample, creditSnapshot: .sample,
+      safeAreaHeight: 44, jpegQuality: 0.9, design: .retroPixel)
+    XCTAssertNotEqual(unknownQuota.data, knownQuota.data)
+  }
+
+  @MainActor
+  func testNeoBrutalismKeepsSafeAreaClearAndDisplaysLiveData() throws {
+    for safeArea in [UsageCardLayout.minimumSafeArea, UsageCardLayout.maximumSafeArea] {
+      let populated = try UsageCardRenderer.render(snapshot: .sample,
+        safeAreaHeight: safeArea, jpegQuality: 0.95, design: .neoBrutalism)
+      let waiting = try UsageCardRenderer.render(snapshot: nil,
+        safeAreaHeight: safeArea, jpegQuality: 0.95, design: .neoBrutalism)
+      let running = try UsageCardRenderer.render(snapshot: .sample, activityState: .running,
+        safeAreaHeight: safeArea, jpegQuality: 0.95, design: .neoBrutalism)
+      XCTAssertNotEqual(populated.data, waiting.data)
+      XCTAssertNotEqual(populated.data, running.data)
+      let bitmap = try XCTUnwrap(NSBitmapImageRep(data: populated.data))
+      for y in 0..<Int(safeArea) {
+        // Check encoded RGB samples without AppKit's calibrated-color conversion.
+        var pixel = [Int](repeating: 0, count: bitmap.samplesPerPixel)
+        bitmap.getPixel(&pixel, atX: 71, y: y)
+        XCTAssertEqual(Double(pixel[0]), 255, accuracy: 6)
+        XCTAssertEqual(Double(pixel[1]), 222, accuracy: 6)
+        XCTAssertEqual(Double(pixel[2]), 89, accuracy: 6)
+      }
+      let attachment = XCTAttachment(data: populated.data, uniformTypeIdentifier: "public.jpeg")
+      attachment.name = "Neo-brutalism-safe-area-\(Int(safeArea))"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
+  }
+
+  @MainActor
   func testPopupFiveHourDataDoesNotChangeKeyboardImage() throws {
     var snapshot = UsageSnapshot.sample
     let before = try UsageCardRenderer.render(snapshot: snapshot,

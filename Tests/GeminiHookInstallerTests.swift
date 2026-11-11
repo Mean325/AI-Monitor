@@ -23,7 +23,11 @@ final class GeminiHookInstallerTests: XCTestCase {
     ]
     try JSONSerialization.data(withJSONObject: existing).write(to: configURL)
 
-    let installer = GeminiHookInstaller(configURL: configURL, handlerURL: handlerURL)
+    let installer = GeminiHookInstaller(
+      configURL: configURL,
+      handlerURL: handlerURL,
+      activityDirectoryURL: root.appendingPathComponent("activity", isDirectory: true)
+    )
     try installer.install()
 
     XCTAssertEqual(installer.installationState(), .configured)
